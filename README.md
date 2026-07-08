@@ -1,43 +1,56 @@
-# Astro Starter Kit: Minimal
+# Spendarium · 消费星象馆
 
-```sh
-npm create astro@latest -- --template minimal
+Spendarium is a privacy-first spending analysis webpage for WeChat Pay and Alipay CSV exports.
+
+The product direction is **Obsidian Ledger, rebuilt as a public web app**: dark luxury financial UI, local CSV parsing, detailed visual analysis, and a Three.js cashflow field that makes spending patterns easier to inspect without turning the app into a generic budget dashboard.
+
+## What It Does
+
+- Upload WeChat Pay / Alipay CSV exports in the browser.
+- Parse and categorize transactions locally.
+- Show total income, total spend, savings, daily average, category structure, top merchants, and spending insights.
+- Render a Three.js cashflow field where time, category, and amount become an interactive visual surface.
+- Export the current view as PNG.
+- Export a standalone HTML finance report.
+- Keep user data local by default. No account, no backend, no upload.
+
+## Stack
+
+- Astro
+- React
+- Three.js via `@react-three/fiber`
+- `html-to-image` for PNG export
+- GitHub Pages deployment via GitHub Actions
+
+## Local Development
+
+```bash
+npm install
+npm run dev
+npm run build
 ```
 
-> 🧑‍🚀 **Seasoned astronaut?** Delete this file. Have fun!
+## Privacy Model
 
-## 🚀 Project Structure
+Spendarium is designed for GitHub Pages and other static hosts.
 
-Inside of your Astro project, you'll see the following folders and files:
+CSV files are read with the browser File API. The app does not send records to a server. The public repo must not include real payment CSV files.
 
-```text
-/
-├── public/
-├── src/
-│   └── pages/
-│       └── index.astro
-└── package.json
+## Deployment
+
+The repository is configured for GitHub Pages at:
+
+```txt
+https://chang-xinhai.github.io/Spendarium/
 ```
 
-Astro looks for `.astro` or `.md` files in the `src/pages/` directory. Each page is exposed as a route based on its file name.
+The GitHub Actions workflow builds Astro and uploads `dist/` to Pages.
 
-There's nothing special about `src/components/`, but that's where we like to put any Astro/React/Vue/Svelte/Preact components.
+## Product Notes
 
-Any static assets, like images, can be placed in the `public/` directory.
+This is not meant to compete with full accounting tools. The product point is a beautiful, private, shareable spending observatory:
 
-## 🧞 Commands
-
-All commands are run from the root of the project, from a terminal:
-
-| Command                   | Action                                           |
-| :------------------------ | :----------------------------------------------- |
-| `npm install`             | Installs dependencies                            |
-| `npm run dev`             | Starts local dev server at `localhost:4321`      |
-| `npm run build`           | Build your production site to `./dist/`          |
-| `npm run preview`         | Preview your build locally, before deploying     |
-| `npm run astro ...`       | Run CLI commands like `astro add`, `astro check` |
-| `npm run astro -- --help` | Get help using the Astro CLI                     |
-
-## 👀 Want to learn more?
-
-Feel free to check [our documentation](https://docs.astro.build) or jump into our [Discord server](https://astro.build/chat).
+- more expressive than a spreadsheet;
+- safer than uploading bills to a random SaaS;
+- easier to use than a hand-built dashboard;
+- visually strong enough to feel like a real personal finance object.

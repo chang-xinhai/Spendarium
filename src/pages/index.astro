@@ -1,17 +1,22 @@
 ---
-
+import SpendariumApp from '../components/SpendariumApp';
+import '../styles/global.css';
 ---
 
-<html lang="en">
-	<head>
-		<meta charset="utf-8" />
-		<link rel="icon" type="image/svg+xml" href="/favicon.svg" />
-		<link rel="icon" href="/favicon.ico" />
-		<meta name="viewport" content="width=device-width" />
-		<meta name="generator" content={Astro.generator} />
-		<title>Astro</title>
-	</head>
-	<body>
-		<h1>Astro</h1>
-	</body>
+<html lang="zh-CN">
+  <head>
+    <meta charset="utf-8" />
+    <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+    <link rel="icon" href="/favicon.ico" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="generator" content={Astro.generator} />
+    <meta
+      name="description"
+      content="Spendarium is a privacy-first spending analysis webpage for WeChat Pay and Alipay CSV exports."
+    />
+    <title>Spendarium · 消费星象馆</title>
+  </head>
+  <body>
+    <SpendariumApp client:only="react" />
+  </body>
 </html>
