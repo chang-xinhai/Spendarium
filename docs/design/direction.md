@@ -1,14 +1,21 @@
 # Design Direction
 
-Spendarium should stay close to the original Obsidian Ledger mood:
+Spendarium should now read like a refined macOS finance object:
 
-- black graphite backgrounds;
-- restrained gold highlights;
-- serif display title with technical UI typography;
-- precise panels, charts, and dense financial readouts;
-- Three.js as an analytical layer, not an abstract sci-fi theme and not the primary dashboard replacement.
+- white and ivory backgrounds;
+- black typography with restrained green and sand accents;
+- title-led landing page before the dashboard;
+- precise panels, charts, and dense financial readouts after upload;
+- no decorative blobs, sci-fi ornaments, or meaningless Three.js shapes.
 
-The primary product surface keeps the original **Obsidian Ledger dashboard**:
+The first screen should behave like a public product page:
+
+- large `Spendarium` title;
+- short explanation of local-first finance mapping;
+- upload and sample actions;
+- product preview that hints at the app without dumping the whole dashboard.
+
+The uploaded workspace keeps the useful finance dashboard:
 
 - summary cards;
 - spending heatmap;
@@ -18,11 +25,12 @@ The primary product surface keeps the original **Obsidian Ledger dashboard**:
 - daily spend line;
 - transaction table.
 
-The secondary signature component is the **Cashflow Field**:
+The signature component is the **Spending Terrain Map**:
 
-- time becomes an orbital path;
-- categories become lanes;
-- amount becomes height, radius, and glow;
-- income is green;
-- spend is category-colored;
-- the surrounding UI remains a detailed finance dashboard.
+- time becomes the horizontal axis;
+- categories become terrain rows;
+- spending amount becomes height;
+- ridges show repeated spending habits;
+- isolated peaks show abnormal or memorable costs;
+- contour lines show amount levels, like a map;
+- the visualization must make the data more readable, not merely more flashy.

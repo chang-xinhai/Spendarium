@@ -7,5 +7,6 @@ import react from '@astrojs/react';
 export default defineConfig({
   site: 'https://chang-xinhai.github.io',
   base: '/Spendarium',
+  devToolbar: { enabled: false },
   integrations: [react()]
 });
