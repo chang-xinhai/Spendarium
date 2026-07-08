@@ -1,20 +1,27 @@
 ---
 import SpendariumApp from '../components/SpendariumApp';
 import '../styles/global.css';
+
+const base = import.meta.env.BASE_URL.endsWith('/') ? import.meta.env.BASE_URL : `${import.meta.env.BASE_URL}/`;
+const canonical = 'https://chang-xinhai.github.io/Spendarium';
 ---
 
 <html lang="zh-CN">
   <head>
     <meta charset="utf-8" />
-    <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
-    <link rel="icon" href="/favicon.ico" />
+    <link rel="icon" type="image/svg+xml" href={`${base}favicon.svg`} />
+    <link rel="canonical" href={canonical} />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <meta name="generator" content={Astro.generator} />
     <meta
       name="description"
-      content="Spendarium is a privacy-first spending analysis webpage for WeChat Pay and Alipay CSV exports."
+      content="Spendarium turns private payment CSVs into a local-first spending atlas."
     />
-    <title>Spendarium · 消费星象馆</title>
+    <meta property="og:title" content="Spendarium" />
+    <meta property="og:description" content="A local-first spending atlas for private payment CSVs." />
+    <meta property="og:url" content={canonical} />
+    <meta property="og:type" content="website" />
+    <title>Spendarium · 消费地形图</title>
   </head>
   <body>
     <SpendariumApp client:only="react" />

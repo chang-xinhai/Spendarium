@@ -1,13 +1,16 @@
 import { toPng } from 'html-to-image';
-import { ArrowLeft, BarChart3, Code2, Download, FileText, LockKeyhole, UploadCloud } from 'lucide-react';
-import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
+import { ArrowLeft, Code2, Download, FileText, Search, UploadCloud } from 'lucide-react';
+import { useEffect, useMemo, useRef, useState, type PointerEvent as ReactPointerEvent, type ReactNode } from 'react';
 import { CATEGORIES } from '../lib/categories';
 import { downloadHTMLReport } from '../lib/exportReport';
 import { buildFinanceModel, formatCurrency, maskMerchant } from '../lib/finance';
 import { parseFiles } from '../lib/parser';
 import { makeDemoTransactions } from '../lib/sampleData';
-import type { FinanceModel, Transaction } from '../lib/types';
+import type { CategoryKey, Direction, FinanceModel, Transaction } from '../lib/types';
 import TerrainMap from './TerrainMap';
+
+const APP_BASE = import.meta.env.BASE_URL || '/';
+const CATEGORY_KEYS = Object.keys(CATEGORIES) as CategoryKey[];
 
 export default function SpendariumApp() {
   const demo = useMemo(() => makeDemoTransactions(), []);
@@ -47,7 +50,7 @@ export default function SpendariumApp() {
 
   async function exportPNG() {
     if (!exportRef.current) return;
-    const dataUrl = await toPng(exportRef.current, { cacheBust: true, pixelRatio: 2, backgroundColor: '#f7f4ee' });
+    const dataUrl = await toPng(exportRef.current, { cacheBust: true, pixelRatio: 2, backgroundColor: '#ffffff' });
     const anchor = document.createElement('a');
     anchor.download = `spendarium-${model.summary.dateRange.start}-${model.summary.dateRange.end}.png`;
     anchor.href = dataUrl;
@@ -79,8 +82,8 @@ function Landing({ preview, onFiles, onSample, error }: {
   return (
     <main className="landing-page">
       <nav className="top-nav">
-        <a className="brand-link" href="/">
-          <span className="brand-glyph">S</span>
+        <a className="brand-link" href={APP_BASE}>
+          <span className="brand-glyph"><BrandMark /></span>
           Spendarium
         </a>
         <div className="nav-actions">
@@ -94,7 +97,6 @@ function Landing({ preview, onFiles, onSample, error }: {
 
       <section className="hero-section">
         <div className="hero-copy">
-          <div className="quiet-lock"><LockKeyhole size={15} /> Local-first finance map</div>
           <h1>Spendarium</h1>
           <p className="hero-subtitle">把账单变成一张消费地形图。</p>
           <p className="hero-body">
@@ -108,8 +110,8 @@ function Landing({ preview, onFiles, onSample, error }: {
             <button className="secondary-cta" onClick={onSample}>试用示例</button>
           </div>
           <div className="command-strip">
-            <span>privacy</span>
-            <code>all parsing runs in your browser</code>
+            <span>隐私</span>
+            <code>所有解析都在浏览器本地完成</code>
           </div>
           {error ? <div className="landing-error">{error}</div> : null}
         </div>
@@ -122,14 +124,12 @@ function Landing({ preview, onFiles, onSample, error }: {
           <div className="preview-body">
             <div className="terrain-preview">
               <TerrainMap transactions={preview.transactions} compact />
-              <div className="terrain-label top">high spend ridges</div>
-              <div className="terrain-label bottom">time axis</div>
             </div>
             <aside className="preview-rail">
-              <MiniMetric label="Total spend" value={formatCurrency(preview.summary.expense)} />
-              <MiniMetric label="Daily avg" value={formatCurrency(preview.summary.avgDaily)} />
-              <MiniMetric label="Peak day" value={formatCurrency(preview.summary.maxDay.total)} />
-              <div className="preview-note">Peaks are spending intensity. Contours are amount levels. Rows are categories.</div>
+              <MiniMetric label="总支出" value={formatCurrency(preview.summary.expense)} />
+              <MiniMetric label="日均支出" value={formatCurrency(preview.summary.avgDaily)} />
+              <MiniMetric label="峰值单日" value={formatCurrency(preview.summary.maxDay.total)} />
+              <MiniMetric label="记录笔数" value={`${preview.summary.count} 笔`} />
             </aside>
           </div>
         </div>
@@ -166,7 +166,7 @@ function Workspace({ model, masked, setMasked, onFiles, onSample, onBack, onExpo
 
       <section className="terrain-card">
         <div className="terrain-copy">
-          <span className="section-kicker">Terrain map</span>
+          <span className="section-kicker">消费地形</span>
           <h2>按时间隆起的消费地貌</h2>
           <p>横向是时间，纵深是消费分类，高度代表对应日期与分类的支出强度。连续山脊意味着稳定的消费习惯，孤峰代表异常支出。</p>
         </div>
@@ -183,22 +183,22 @@ function Workspace({ model, masked, setMasked, onFiles, onSample, onBack, onExpo
       </section>
 
       <section className="workspace-grid">
-        <Panel title="消费热力图" right={`${model.daily.length} active days`}>
+        <Panel title="消费热力图" span="full">
           <Heatmap model={model} />
         </Panel>
         <Panel title="支出分类占比">
           <CategoryDonut model={model} />
         </Panel>
-        <Panel title="Top 消费商户">
+        <Panel title="消费商户排行">
           <MerchantList model={model} masked={masked} />
         </Panel>
         <Panel title="月度收支趋势">
           <MonthlyTrend model={model} />
         </Panel>
         <Panel title="每日支出波动">
-          <DailyLine model={model} />
+          <DailySpendChart model={model} />
         </Panel>
-        <Panel title="交易明细" right={<label className="mask-toggle"><input type="checkbox" checked={masked} onChange={(event) => setMasked(event.target.checked)} /> 隐藏商户</label>}>
+        <Panel title="交易明细" span="full" right={<label className="mask-toggle"><input type="checkbox" checked={masked} onChange={(event) => setMasked(event.target.checked)} /> 隐藏商户</label>}>
           <TransactionTable model={model} masked={masked} />
         </Panel>
       </section>
@@ -214,9 +214,20 @@ function SummaryCard({ label, value }: { label: string; value: string }) {
   return <article className="summary-tile"><span>{label}</span><strong>{value}</strong></article>;
 }
 
-function Panel({ title, right, children }: { title: string; right?: ReactNode; children: ReactNode }) {
+function BrandMark() {
   return (
-    <section className="analysis-panel">
+    <svg viewBox="0 0 36 36" aria-hidden="true">
+      <path d="M7 24c6-7 16-7 22 0" />
+      <path d="M9 19c5-5 13-5 18 0" />
+      <path d="M12 14c4-3 8-3 12 0" />
+      <path d="M16 9h6" />
+    </svg>
+  );
+}
+
+function Panel({ title, right, span, children }: { title: string; right?: ReactNode; span?: 'full'; children: ReactNode }) {
+  return (
+    <section className={`analysis-panel ${span === 'full' ? 'panel-full' : ''}`}>
       <div className="analysis-title"><h3>{title}</h3>{right ? <div>{right}</div> : null}</div>
       {children}
     </section>
@@ -224,17 +235,56 @@ function Panel({ title, right, children }: { title: string; right?: ReactNode; c
 }
 
 function Heatmap({ model }: { model: FinanceModel }) {
-  const days = makeHeatmapDays(model);
-  const max = Math.max(...days.map((day) => day.expense), 1);
+  const heatmap = useMemo(() => buildHeatmap(model), [model]);
+  const [hovered, setHovered] = useState<HeatmapHover | null>(null);
+
+  function showTooltip(day: HeatmapDay, event: ReactPointerEvent<HTMLButtonElement>) {
+    setHovered({ day, x: event.clientX + 14, y: event.clientY + 14 });
+  }
+
   return (
-    <div className="heatmap-wrap">
-      <div className="day-labels"><span>一</span><span>二</span><span>三</span><span>四</span><span>五</span><span>六</span><span>日</span></div>
-      <div className="heatmap-grid">
-        {days.map((day) => {
-          const level = day.expense ? Math.max(1, Math.ceil(day.expense / max * 5)) : 0;
-          return <span className={`heat-cell l${level}`} key={day.date} title={`${day.date} · ${formatCurrency(day.expense)}`} />;
-        })}
+    <div className="heatmap-shell">
+      <div className="heatmap-meta">
+        <span>{heatmap.yearLabel}</span>
+        <div className="heatmap-legend" aria-label="消费金额图例">
+          <span>少</span><i className="l0" /><i className="l1" /><i className="l2" /><i className="l3" /><i className="l4" /><i className="l5" /><span>多</span>
+        </div>
+        <span>{model.daily.length} 个活跃日</span>
       </div>
+      <div className="heatmap-wrap">
+        <div className="day-labels"><span>一</span><span>二</span><span>三</span><span>四</span><span>五</span><span>六</span><span>日</span></div>
+        <div className="heatmap-calendar">
+          <div className="heatmap-months" style={{ gridTemplateColumns: `repeat(${heatmap.weeks.length}, var(--heat-cell))` }}>
+            {heatmap.months.map((month) => (
+              <span key={month.key} style={{ gridColumn: `${month.start + 1} / span ${month.span}` }}>{month.label}</span>
+            ))}
+          </div>
+          <div className="heatmap-weeks">
+            {heatmap.weeks.map((week, weekIndex) => (
+              <div className="heatmap-week" key={week[0]?.date || weekIndex}>
+                {week.map((day) => (
+                  <button
+                    className={`heat-cell l${day.level} ${day.inRange ? '' : 'out-range'}`}
+                    key={day.date}
+                    type="button"
+                    aria-label={`${day.date} 支出 ${formatCurrency(day.expense)}，${day.count} 笔交易`}
+                    onPointerEnter={(event) => showTooltip(day, event)}
+                    onPointerMove={(event) => showTooltip(day, event)}
+                    onPointerLeave={() => setHovered(null)}
+                  />
+                ))}
+              </div>
+            ))}
+          </div>
+        </div>
+      </div>
+      {hovered ? (
+        <div className="chart-tooltip heatmap-tooltip" style={{ left: hovered.x, top: hovered.y }}>
+          <strong>{hovered.day.date}</strong>
+          <span>{formatCurrency(hovered.day.expense)}</span>
+          <em>{hovered.day.count} 笔交易</em>
+        </div>
+      ) : null}
     </div>
   );
 }
@@ -250,7 +300,7 @@ function CategoryDonut({ model }: { model: FinanceModel }) {
   return (
     <div className="donut-layout">
       <div className="donut" style={{ background: `conic-gradient(${gradient || '#e7e2d8 0% 100%'})` }}>
-        <div><strong>{formatCurrency(model.summary.expense)}</strong><span>total</span></div>
+        <div><strong>{formatCurrency(model.summary.expense)}</strong><span>总支出</span></div>
       </div>
       <div className="category-list">
         {model.categories.slice(0, 8).map((category) => (
@@ -293,55 +343,274 @@ function MonthlyTrend({ model }: { model: FinanceModel }) {
   );
 }
 
-function DailyLine({ model }: { model: FinanceModel }) {
-  const rows = model.daily.slice(-90);
+function DailySpendChart({ model }: { model: FinanceModel }) {
+  const svgRef = useRef<SVGSVGElement>(null);
+  const [hoverIndex, setHoverIndex] = useState<number | null>(null);
+  const rows = useMemo(() => buildDailySeries(model), [model]);
+  const width = 900;
+  const height = 300;
+  const margin = { top: 20, right: 26, bottom: 44, left: 70 };
+  const innerWidth = width - margin.left - margin.right;
+  const innerHeight = height - margin.top - margin.bottom;
   const max = Math.max(...rows.map((row) => row.expense), 1);
-  const width = 820;
-  const height = 180;
+  const yTicks = makeTicks(max, 4);
+  const xTicks = makeDateTicks(rows, 7);
   const points = rows.map((row, index) => {
-    const x = rows.length <= 1 ? 0 : index / (rows.length - 1) * width;
-    const y = height - (row.expense / max) * (height - 18) - 9;
-    return `${x.toFixed(1)},${y.toFixed(1)}`;
-  }).join(' ');
-  return (
-    <svg className="daily-line" viewBox={`0 0 ${width} ${height}`} role="img" aria-label="Daily spend line chart">
-      <polyline points={points} fill="none" stroke="#111111" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round" />
-    </svg>
-  );
-}
+    const x = margin.left + (rows.length <= 1 ? 0 : index / (rows.length - 1) * innerWidth);
+    const y = margin.top + innerHeight - (row.expense / max) * innerHeight;
+    return { ...row, x, y };
+  });
+  const linePath = points.map((point, index) => `${index ? 'L' : 'M'} ${point.x.toFixed(1)} ${point.y.toFixed(1)}`).join(' ');
+  const areaPath = `${linePath} L ${points[points.length - 1]?.x || margin.left} ${margin.top + innerHeight} L ${margin.left} ${margin.top + innerHeight} Z`;
+  const hovered = hoverIndex === null ? null : points[hoverIndex];
 
-function TransactionTable({ model, masked }: { model: FinanceModel; masked: boolean }) {
+  function handlePointerMove(event: ReactPointerEvent<SVGSVGElement>) {
+    if (!svgRef.current || !points.length) return;
+    const rect = svgRef.current.getBoundingClientRect();
+    const x = (event.clientX - rect.left) / rect.width * width;
+    const ratio = Math.min(1, Math.max(0, (x - margin.left) / innerWidth));
+    setHoverIndex(Math.round(ratio * (points.length - 1)));
+  }
+
   return (
-    <div className="tx-table">
-      {model.transactions.slice(0, 80).map((tx) => {
-        const category = CATEGORIES[tx.category];
-        return (
-          <div className="tx-row" key={tx.id}>
-            <span>{tx.time}</span>
-            <b>{masked ? maskMerchant(tx.counterpart || tx.description) : tx.counterpart || tx.description}</b>
-            <em style={{ color: category.color }}>{category.name}</em>
-            <strong>{tx.direction === 'income' ? '+' : tx.direction === 'expense' ? '-' : ''}{formatCurrency(tx.amount)}</strong>
-          </div>
-        );
-      })}
+    <div className="daily-chart-wrap">
+      <svg
+        ref={svgRef}
+        className="daily-chart"
+        viewBox={`0 0 ${width} ${height}`}
+        role="img"
+        aria-label="每日支出折线图"
+        onPointerMove={handlePointerMove}
+        onPointerLeave={() => setHoverIndex(null)}
+      >
+        <defs>
+          <linearGradient id="dailyArea" x1="0" x2="0" y1="0" y2="1">
+            <stop offset="0%" stopColor="#07c160" stopOpacity="0.18" />
+            <stop offset="100%" stopColor="#07c160" stopOpacity="0" />
+          </linearGradient>
+        </defs>
+        {yTicks.map((tick) => {
+          const y = margin.top + innerHeight - (tick / max) * innerHeight;
+          return (
+            <g key={tick}>
+              <line className="chart-grid" x1={margin.left} x2={width - margin.right} y1={y} y2={y} />
+              <text className="chart-y-label" x={margin.left - 12} y={y + 4} textAnchor="end">{formatCompactCurrency(tick)}</text>
+            </g>
+          );
+        })}
+        <line className="chart-axis" x1={margin.left} x2={width - margin.right} y1={margin.top + innerHeight} y2={margin.top + innerHeight} />
+        <line className="chart-axis" x1={margin.left} x2={margin.left} y1={margin.top} y2={margin.top + innerHeight} />
+        {xTicks.map((tick) => {
+          const point = points[tick.index];
+          return point ? <text className="chart-x-label" key={tick.index} x={point.x} y={height - 12} textAnchor="middle">{tick.label}</text> : null;
+        })}
+        <path className="daily-area" d={areaPath} />
+        <path className="daily-line" d={linePath} />
+        {hovered ? (
+          <g>
+            <line className="chart-crosshair" x1={hovered.x} x2={hovered.x} y1={margin.top} y2={margin.top + innerHeight} />
+            <line className="chart-crosshair" x1={margin.left} x2={width - margin.right} y1={hovered.y} y2={hovered.y} />
+            <circle className="daily-point" cx={hovered.x} cy={hovered.y} r="5" />
+          </g>
+        ) : null}
+      </svg>
+      {hovered ? (
+        <div
+          className="chart-tooltip daily-tooltip"
+          style={{ left: `${hovered.x / width * 100}%`, top: `${hovered.y / height * 100}%` }}
+        >
+          <strong>{hovered.date}</strong>
+          <span>{formatCurrency(hovered.expense)}</span>
+          <em>{hovered.count} 笔交易</em>
+        </div>
+      ) : null}
     </div>
   );
 }
 
-function makeHeatmapDays(model: FinanceModel) {
-  const daily = new Map(model.daily.map((row) => [row.date, row]));
-  const start = new Date(model.summary.dateRange.start);
-  start.setDate(start.getDate() - ((start.getDay() + 6) % 7));
-  const end = new Date(model.summary.dateRange.end);
-  end.setDate(end.getDate() + (6 - ((end.getDay() + 6) % 7)));
+function TransactionTable({ model, masked }: { model: FinanceModel; masked: boolean }) {
+  const [query, setQuery] = useState('');
+  const [category, setCategory] = useState<'all' | CategoryKey>('all');
+  const [direction, setDirection] = useState<'all' | Direction>('all');
+  const [sort, setSort] = useState<'time-desc' | 'time-asc' | 'amount-desc' | 'amount-asc' | 'merchant-asc'>('time-desc');
+  const filtered = useMemo(() => filterTransactions(model.transactions, { query, category, direction, sort }), [model.transactions, query, category, direction, sort]);
+  const shown = filtered.slice(0, 200);
 
-  const days: Array<{ date: string; expense: number; count: number }> = [];
+  return (
+    <div className="tx-module">
+      <div className="tx-toolbar">
+        <label className="tx-search-box">
+          <Search size={15} />
+          <input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="搜索商户、商品、类型" />
+        </label>
+        <select value={category} onChange={(event) => setCategory(event.target.value as 'all' | CategoryKey)} aria-label="按分类筛选">
+          <option value="all">全部分类</option>
+          {CATEGORY_KEYS.map((key) => <option key={key} value={key}>{CATEGORIES[key].name}</option>)}
+        </select>
+        <select value={direction} onChange={(event) => setDirection(event.target.value as 'all' | Direction)} aria-label="按收支方向筛选">
+          <option value="all">全部收支</option>
+          <option value="expense">支出</option>
+          <option value="income">收入</option>
+          <option value="neutral">中性</option>
+        </select>
+        <select value={sort} onChange={(event) => setSort(event.target.value as typeof sort)} aria-label="排序方式">
+          <option value="time-desc">时间最新</option>
+          <option value="time-asc">时间最早</option>
+          <option value="amount-desc">金额最高</option>
+          <option value="amount-asc">金额最低</option>
+          <option value="merchant-asc">商户 A-Z</option>
+        </select>
+        <span className="tx-count">{filtered.length} 条匹配</span>
+      </div>
+      <div className="tx-table">
+        {shown.length ? shown.map((tx) => {
+          const cat = CATEGORIES[tx.category];
+          return (
+            <div className="tx-row" key={tx.id}>
+              <span>{tx.time}</span>
+              <b>{masked ? maskMerchant(tx.counterpart || tx.description) : tx.counterpart || tx.description}</b>
+              <em style={{ color: cat.color, borderColor: `${cat.color}44` }}><i style={{ background: cat.color }} />{cat.name}</em>
+              <small>{sourceLabel(tx.source)}</small>
+              <strong className={tx.direction}>{tx.direction === 'income' ? '+' : tx.direction === 'expense' ? '-' : ''}{formatCurrency(tx.amount)}</strong>
+            </div>
+          );
+        }) : <div className="empty-state">暂无匹配的交易记录</div>}
+      </div>
+    </div>
+  );
+}
+
+interface HeatmapDay {
+  date: string;
+  expense: number;
+  count: number;
+  level: 0 | 1 | 2 | 3 | 4 | 5;
+  inRange: boolean;
+}
+
+interface HeatmapHover {
+  day: HeatmapDay;
+  x: number;
+  y: number;
+}
+
+function buildHeatmap(model: FinanceModel) {
+  const daily = new Map(model.daily.map((row) => [row.date, row]));
+  const rangeStart = new Date(model.summary.dateRange.start);
+  const rangeEnd = new Date(model.summary.dateRange.end);
+  const sameYear = rangeStart.getFullYear() === rangeEnd.getFullYear();
+  const start = sameYear ? new Date(rangeStart.getFullYear(), 0, 1) : new Date(rangeStart);
+  start.setDate(start.getDate() - ((start.getDay() + 6) % 7));
+  const end = sameYear ? new Date(rangeEnd.getFullYear(), 11, 31) : new Date(rangeEnd);
+  end.setDate(end.getDate() + (6 - ((end.getDay() + 6) % 7)));
+  const max = Math.max(...model.daily.map((row) => row.expense), 1);
+
+  const days: HeatmapDay[] = [];
   const cursor = new Date(start);
   while (cursor <= end) {
     const date = cursor.toISOString().slice(0, 10);
     const row = daily.get(date);
-    days.push({ date, expense: row?.expense || 0, count: row?.count || 0 });
+    const expense = row?.expense || 0;
+    const ratio = expense / max;
+    const level = (expense === 0 ? 0 : ratio > 0.8 ? 5 : ratio > 0.55 ? 4 : ratio > 0.32 ? 3 : ratio > 0.12 ? 2 : 1) as HeatmapDay['level'];
+    days.push({ date, expense, count: row?.count || 0, level, inRange: cursor >= rangeStart && cursor <= rangeEnd });
     cursor.setDate(cursor.getDate() + 1);
   }
-  return days;
+  const weeks: HeatmapDay[][] = [];
+  for (let index = 0; index < days.length; index += 7) weeks.push(days.slice(index, index + 7));
+  const labelEnd = sameYear ? new Date(rangeEnd.getFullYear(), 11, 31) : end;
+  const months = buildHeatmapMonths(start, labelEnd, weeks.length);
+  const yearLabel = rangeStart.getFullYear() === rangeEnd.getFullYear()
+    ? `${rangeStart.getFullYear()}`
+    : `${rangeStart.getFullYear()} - ${rangeEnd.getFullYear()}`;
+  return { weeks, months, yearLabel };
+}
+
+function buildHeatmapMonths(calendarStart: Date, calendarEnd: Date, weekCount: number) {
+  const labels: Array<{ key: string; label: string; start: number; span: number }> = [];
+  const cursor = new Date(calendarStart.getFullYear(), calendarStart.getMonth(), 1);
+  if (cursor < calendarStart) cursor.setMonth(cursor.getMonth() + 1);
+  while (cursor <= calendarEnd) {
+    const start = Math.max(0, Math.floor((cursor.getTime() - calendarStart.getTime()) / (86400000 * 7)));
+    const next = new Date(cursor);
+    next.setMonth(next.getMonth() + 1);
+    const nextStart = Math.min(weekCount, Math.floor((next.getTime() - calendarStart.getTime()) / (86400000 * 7)));
+    const span = Math.max(1, nextStart - start);
+    labels.push({
+      key: `${cursor.getFullYear()}-${cursor.getMonth()}`,
+      label: cursor.getMonth() === 0 || labels.length === 0 ? `${cursor.getFullYear()}年${cursor.getMonth() + 1}月` : `${cursor.getMonth() + 1}月`,
+      start,
+      span,
+    });
+    cursor.setMonth(cursor.getMonth() + 1);
+  }
+  return labels;
+}
+
+function buildDailySeries(model: FinanceModel) {
+  const daily = new Map(model.daily.map((row) => [row.date, row]));
+  const rows: Array<{ date: string; expense: number; count: number }> = [];
+  const cursor = new Date(model.summary.dateRange.start);
+  const end = new Date(model.summary.dateRange.end);
+  while (cursor <= end) {
+    const date = cursor.toISOString().slice(0, 10);
+    const row = daily.get(date);
+    rows.push({ date, expense: row?.expense || 0, count: row?.count || 0 });
+    cursor.setDate(cursor.getDate() + 1);
+  }
+  return rows.length ? rows : [{ date: model.summary.dateRange.start, expense: 0, count: 0 }];
+}
+
+function makeDateTicks(rows: Array<{ date: string }>, maxTicks: number) {
+  if (rows.length <= 1) return [{ index: 0, label: rows[0]?.date || '' }];
+  const step = Math.max(1, Math.floor((rows.length - 1) / (maxTicks - 1)));
+  const ticks = [];
+  for (let index = 0; index < rows.length; index += step) ticks.push({ index, label: formatShortDate(rows[index].date) });
+  if (ticks[ticks.length - 1]?.index !== rows.length - 1) ticks.push({ index: rows.length - 1, label: formatShortDate(rows[rows.length - 1].date) });
+  return ticks;
+}
+
+function makeTicks(max: number, count: number) {
+  return Array.from({ length: count + 1 }, (_, index) => Math.round(max / count * index));
+}
+
+function formatCompactCurrency(value: number) {
+  if (value >= 10000) return `¥${(value / 10000).toFixed(1)}w`;
+  if (value >= 1000) return `¥${(value / 1000).toFixed(1)}k`;
+  return `¥${Math.round(value)}`;
+}
+
+function formatShortDate(date: string) {
+  const parsed = new Date(date);
+  return `${parsed.getMonth() + 1}/${parsed.getDate()}`;
+}
+
+function filterTransactions(transactions: Transaction[], filters: {
+  query: string;
+  category: 'all' | CategoryKey;
+  direction: 'all' | Direction;
+  sort: 'time-desc' | 'time-asc' | 'amount-desc' | 'amount-asc' | 'merchant-asc';
+}) {
+  const query = filters.query.trim().toLowerCase();
+  return transactions
+    .filter((tx) => {
+      if (filters.category !== 'all' && tx.category !== filters.category) return false;
+      if (filters.direction !== 'all' && tx.direction !== filters.direction) return false;
+      if (!query) return true;
+      return `${tx.counterpart} ${tx.description} ${tx.type}`.toLowerCase().includes(query);
+    })
+    .sort((a, b) => {
+      if (filters.sort === 'time-asc') return a.timestamp - b.timestamp;
+      if (filters.sort === 'amount-desc') return b.amount - a.amount;
+      if (filters.sort === 'amount-asc') return a.amount - b.amount;
+      if (filters.sort === 'merchant-asc') return (a.counterpart || a.description).localeCompare(b.counterpart || b.description, 'zh-CN');
+      return b.timestamp - a.timestamp;
+    });
+}
+
+function sourceLabel(source: Transaction['source']) {
+  if (source === 'wechat') return '微信';
+  if (source === 'alipay') return '支付宝';
+  if (source === 'demo') return '示例';
+  return 'CSV';
 }
