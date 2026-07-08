@@ -2,14 +2,15 @@
 
 Spendarium is a privacy-first spending analysis webpage for WeChat Pay and Alipay CSV exports.
 
-The product direction is **Obsidian Ledger, rebuilt as a public web app**: dark luxury financial UI, local CSV parsing, detailed visual analysis, and a Three.js cashflow field that makes spending patterns easier to inspect without turning the app into a generic budget dashboard.
+The product direction is **Obsidian Ledger, rebuilt as a public web app**: keep the original black-gold financial dashboard, keep the useful analysis modules, and make the implementation more robust than the previous single-file HTML prototype.
 
 ## What It Does
 
 - Upload WeChat Pay / Alipay CSV exports in the browser.
 - Parse and categorize transactions locally.
-- Show total income, total spend, savings, daily average, category structure, top merchants, and spending insights.
-- Render a Three.js cashflow field where time, category, and amount become an interactive visual surface.
+- Show total income, total spend, savings, daily average, max spend day, category structure, top merchants, spending insights, and transaction details.
+- Preserve the original analysis surfaces: spending heatmap, category breakdown, merchant ranking, monthly trend, daily spend line, and transaction table.
+- Add a secondary Three.js cashflow field where time, category, and amount become an interactive visual surface.
 - Export the current view as PNG.
 - Export a standalone HTML finance report.
 - Keep user data local by default. No account, no backend, no upload.
@@ -48,7 +49,7 @@ The GitHub Actions workflow builds Astro and uploads `dist/` to Pages.
 
 ## Product Notes
 
-This is not meant to compete with full accounting tools. The product point is a beautiful, private, shareable spending observatory:
+This is not meant to compete with full accounting tools. The product point is a beautiful, private, shareable spending dashboard:
 
 - more expressive than a spreadsheet;
 - safer than uploading bills to a random SaaS;

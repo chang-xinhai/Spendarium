@@ -7,17 +7,18 @@ import type { CategoryKey, Transaction } from '../lib/types';
 
 interface SpendingFieldProps {
   transactions: Transaction[];
+  minHeight?: number;
 }
 
 const categoryOrder = Object.keys(CATEGORIES) as CategoryKey[];
 
-export default function SpendingField({ transactions }: SpendingFieldProps) {
+export default function SpendingField({ transactions, minHeight = 560 }: SpendingFieldProps) {
   return (
     <Canvas
       camera={{ position: [0, 5.4, 7.2], fov: 45 }}
       dpr={[1, 2]}
       gl={{ antialias: true, alpha: true, preserveDrawingBuffer: true }}
-      style={{ height: '100%', minHeight: 560, width: '100%' }}
+      style={{ height: '100%', minHeight, width: '100%' }}
     >
       <color attach="background" args={['#06060b']} />
       <fog attach="fog" args={['#06060b', 7, 13]} />
