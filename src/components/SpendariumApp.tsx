@@ -21,6 +21,7 @@ interface TopicTag {
 interface TagState {
   tags: TopicTag[];
   assignments: Record<string, string[]>;
+  deletedDefaultTagIds?: string[];
 }
 
 const DEFAULT_TAGS: TopicTag[] = [
@@ -88,9 +89,38 @@ export default function SpendariumApp() {
     if (!clean) return '';
     const existing = tagState.tags.find((tag) => tag.name.toLowerCase() === clean.toLowerCase());
     if (existing) return existing.id;
+    const defaultMatch = DEFAULT_TAGS.find((tag) => tag.name.toLowerCase() === clean.toLowerCase());
+    if (defaultMatch && tagState.deletedDefaultTagIds?.includes(defaultMatch.id)) {
+      setTagState((current) => ({
+        ...current,
+        deletedDefaultTagIds: current.deletedDefaultTagIds?.filter((id) => id !== defaultMatch.id),
+        tags: [...current.tags, defaultMatch],
+      }));
+      return defaultMatch.id;
+    }
     const nextTag = { id: makeTagId(clean), name: clean };
     setTagState((current) => ({ ...current, tags: [...current.tags, nextTag] }));
     return nextTag.id;
+  }
+
+  function deleteTag(tagId: string) {
+    setTagState((current) => {
+      const defaultIds = new Set(DEFAULT_TAGS.map((tag) => tag.id));
+      const assignments: Record<string, string[]> = {};
+      for (const [txId, values] of Object.entries(current.assignments)) {
+        const next = values.filter((id) => id !== tagId);
+        if (next.length) assignments[txId] = next;
+      }
+      const deletedDefaultTagIds = defaultIds.has(tagId)
+        ? Array.from(new Set([...(current.deletedDefaultTagIds || []), tagId]))
+        : current.deletedDefaultTagIds;
+      return {
+        ...current,
+        tags: current.tags.filter((tag) => tag.id !== tagId),
+        assignments,
+        deletedDefaultTagIds,
+      };
+    });
   }
 
   function assignTag(txIds: string[], tagId: string) {
@@ -120,7 +150,8 @@ export default function SpendariumApp() {
     if (!exportRef.current) return;
     const dataUrl = await toPng(exportRef.current, { cacheBust: true, pixelRatio: 2, backgroundColor: '#ffffff' });
     const anchor = document.createElement('a');
-    anchor.download = `spendarium-${model.summary.dateRange.start}-${model.summary.dateRange.end}.png`;
+    const topic = activeTagId === 'all' ? 'all' : getActiveTagName(activeTagId, tagState.tags);
+    anchor.download = `spendarium-${slugifyFilePart(topic)}-${model.summary.dateRange.start}-${model.summary.dateRange.end}.png`;
     anchor.href = dataUrl;
     anchor.click();
   }
@@ -137,6 +168,7 @@ export default function SpendariumApp() {
       activeTagId={activeTagId}
       setActiveTagId={setActiveTagId}
       createTag={createTag}
+      deleteTag={deleteTag}
       assignTag={assignTag}
       removeTag={removeTag}
       onFiles={handleFiles}
@@ -222,6 +254,7 @@ function Workspace({
   activeTagId,
   setActiveTagId,
   createTag,
+  deleteTag,
   assignTag,
   removeTag,
   onFiles,
@@ -238,6 +271,7 @@ function Workspace({
   activeTagId: string;
   setActiveTagId: (tagId: string) => void;
   createTag: (name: string) => string;
+  deleteTag: (tagId: string) => void;
   assignTag: (txIds: string[], tagId: string) => void;
   removeTag: (txId: string, tagId: string) => void;
   onFiles: (files: FileList | null) => void;
@@ -246,6 +280,11 @@ function Workspace({
   onExportPNG: () => void;
   exportRef: React.RefObject<HTMLDivElement | null>;
 }) {
+  const reportTagContext = useMemo(
+    () => buildReportTagContext(model.transactions, baseModel.transactions, tagState, activeTagId),
+    [activeTagId, baseModel.transactions, model.transactions, tagState],
+  );
+
   return (
     <main className="workspace-page" ref={exportRef}>
       <header className="workspace-header">
@@ -258,7 +297,7 @@ function Workspace({
           <label className="small-button"><UploadCloud size={16} /> 上传<input type="file" accept=".csv,.txt" multiple onChange={(event) => onFiles(event.target.files)} /></label>
           <button className="small-button" onClick={onSample}>示例</button>
           <button className="small-button" onClick={() => void onExportPNG()}><Download size={16} /> PNG</button>
-          <button className="small-button" onClick={() => downloadHTMLReport(model, masked)}><FileText size={16} /> HTML</button>
+          <button className="small-button" onClick={() => downloadHTMLReport(model, masked, reportTagContext)}><FileText size={16} /> HTML</button>
         </div>
       </header>
 
@@ -266,6 +305,8 @@ function Workspace({
         activeTagId={activeTagId}
         assignments={tagState.assignments}
         baseModel={baseModel}
+        createTag={createTag}
+        deleteTag={deleteTag}
         model={model}
         setActiveTagId={setActiveTagId}
         tags={tagState.tags}
@@ -320,16 +361,25 @@ function Workspace({
   );
 }
 
-function TopicScopeBar({ activeTagId, assignments, baseModel, model, setActiveTagId, tags }: {
+function TopicScopeBar({ activeTagId, assignments, baseModel, createTag, deleteTag, model, setActiveTagId, tags }: {
   activeTagId: string;
   assignments: Record<string, string[]>;
   baseModel: FinanceModel;
+  createTag: (name: string) => string;
+  deleteTag: (tagId: string) => void;
   model: FinanceModel;
   setActiveTagId: (tagId: string) => void;
   tags: TopicTag[];
 }) {
+  const [draft, setDraft] = useState('');
   const stats = useMemo(() => buildTagStats(baseModel.transactions, tags, assignments), [assignments, baseModel.transactions, tags]);
   const activeName = activeTagId === 'all' ? '全部账单' : tags.find((tag) => tag.id === activeTagId)?.name || '专题';
+
+  function createEmptyTag() {
+    const tagId = createTag(draft);
+    if (!tagId) return;
+    setDraft('');
+  }
 
   return (
     <section className="topic-scope" aria-label="专题筛选">
@@ -338,18 +388,34 @@ function TopicScopeBar({ activeTagId, assignments, baseModel, model, setActiveTa
         <strong>{activeName}</strong>
         <em>{model.summary.count} 笔 · {formatCurrency(model.summary.expense)} 支出</em>
       </div>
-      <div className="topic-chips">
-        <button className={activeTagId === 'all' ? 'active' : ''} type="button" onClick={() => setActiveTagId('all')}>
-          All <small>{baseModel.summary.count}</small>
-        </button>
-        {tags.map((tag) => {
-          const tagStats = stats.get(tag.id) || { count: 0, expense: 0 };
-          return (
-            <button className={activeTagId === tag.id ? 'active' : ''} key={tag.id} type="button" onClick={() => setActiveTagId(tag.id)}>
-              {tag.name} <small>{tagStats.count}</small>
-            </button>
-          );
-        })}
+      <div className="topic-control">
+        <div className="topic-chips">
+          <button className={activeTagId === 'all' ? 'active' : ''} type="button" onClick={() => setActiveTagId('all')}>
+            All <small>{baseModel.summary.count}</small>
+          </button>
+          {tags.map((tag) => {
+            const tagStats = stats.get(tag.id) || { count: 0, expense: 0 };
+            return (
+              <span className={`topic-chip ${activeTagId === tag.id ? 'active' : ''}`} key={tag.id}>
+                <button type="button" onClick={() => setActiveTagId(tag.id)}>
+                  {tag.name} <small>{tagStats.count}</small>
+                </button>
+                <button aria-label={`删除标签 ${tag.name}`} className="topic-delete" type="button" onClick={() => deleteTag(tag.id)}>
+                  <X size={12} />
+                </button>
+              </span>
+            );
+          })}
+        </div>
+        <div className="topic-create-row">
+          <label className="topic-create-box">
+            <Plus size={14} />
+            <input value={draft} onChange={(event) => setDraft(event.target.value)} placeholder="新建标签" onKeyDown={(event) => {
+              if (event.key === 'Enter') createEmptyTag();
+            }} />
+          </label>
+          <button disabled={!normalizeTagName(draft)} type="button" onClick={createEmptyTag}>新建</button>
+        </div>
       </div>
     </section>
   );
@@ -948,12 +1014,37 @@ function buildTagStats(transactions: Transaction[], tags: TopicTag[], assignment
   return stats;
 }
 
+function buildReportTagContext(currentTransactions: Transaction[], allTransactions: Transaction[], state: TagState, activeTagId: string) {
+  const tagById = new Map(state.tags.map((tag) => [tag.id, tag.name]));
+  const stats = buildTagStats(allTransactions, state.tags, state.assignments);
+  return {
+    activeTagName: activeTagId === 'all' ? '全部账单' : getActiveTagName(activeTagId, state.tags),
+    tagSummary: state.tags.map((tag) => {
+      const tagStats = stats.get(tag.id) || { count: 0, expense: 0 };
+      return { name: tag.name, count: tagStats.count, expense: tagStats.expense };
+    }),
+    transactionTags: Object.fromEntries(
+      currentTransactions.map((tx) => [
+        tx.id,
+        (state.assignments[tx.id] || []).map((tagId) => tagById.get(tagId)).filter(Boolean) as string[],
+      ]),
+    ),
+  };
+}
+
+function getActiveTagName(activeTagId: string, tags: TopicTag[]) {
+  return tags.find((tag) => tag.id === activeTagId)?.name || '专题';
+}
+
 function loadTagState(): TagState {
   if (typeof window === 'undefined') return { tags: DEFAULT_TAGS, assignments: {} };
   try {
     const raw = window.localStorage.getItem(TAG_STORAGE_KEY);
     if (!raw) return { tags: DEFAULT_TAGS, assignments: {} };
     const parsed = JSON.parse(raw) as Partial<TagState>;
+    const deletedDefaultTagIds = Array.isArray(parsed.deletedDefaultTagIds)
+      ? parsed.deletedDefaultTagIds.filter((value): value is string => typeof value === 'string')
+      : [];
     const assignedTagIds = new Set<string>();
     if (parsed.assignments && typeof parsed.assignments === 'object') {
       for (const values of Object.values(parsed.assignments)) {
@@ -970,7 +1061,7 @@ function loadTagState(): TagState {
       : [];
     const defaultTagIds = new Set(DEFAULT_TAGS.map((tag) => tag.id));
     const customTags = savedTags.filter((tag) => !defaultTagIds.has(tag.id));
-    const tags = [...DEFAULT_TAGS, ...customTags];
+    const tags = [...DEFAULT_TAGS.filter((tag) => !deletedDefaultTagIds.includes(tag.id)), ...customTags];
     const assignments: Record<string, string[]> = {};
     if (parsed.assignments && typeof parsed.assignments === 'object') {
       for (const [txId, values] of Object.entries(parsed.assignments)) {
@@ -979,7 +1070,7 @@ function loadTagState(): TagState {
         if (clean.length) assignments[txId] = Array.from(new Set(clean));
       }
     }
-    return { tags, assignments };
+    return { tags, assignments, deletedDefaultTagIds };
   } catch {
     return { tags: DEFAULT_TAGS, assignments: {} };
   }
@@ -997,6 +1088,10 @@ function normalizeTagName(name: string) {
 function makeTagId(name: string) {
   const slug = Array.from(name).map((char) => char.charCodeAt(0).toString(36)).join('').slice(0, 24);
   return `topic_${slug}_${Date.now().toString(36)}`;
+}
+
+function slugifyFilePart(value: string) {
+  return value.trim().toLowerCase().replace(/[^\p{L}\p{N}]+/gu, '-').replace(/^-|-$/g, '') || 'topic';
 }
 
 function sourceLabel(source: Transaction['source']) {

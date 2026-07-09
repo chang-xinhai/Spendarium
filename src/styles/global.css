@@ -412,6 +412,11 @@ button {
   justify-content: flex-end;
 }
 
+.topic-control {
+  display: grid;
+  gap: 10px;
+}
+
 .topic-chips button,
 .tag-quick-list button,
 .tx-action-button {
@@ -427,6 +432,31 @@ button {
   color: #3f4740;
   font-size: 0.78rem;
   padding: 6px 12px;
+}
+
+.topic-chip {
+  align-items: stretch;
+  background: var(--bg-soft);
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  display: inline-flex;
+  overflow: hidden;
+}
+
+.topic-chip > button {
+  background: transparent;
+  border: 0;
+  border-radius: 0;
+  min-height: 32px;
+}
+
+.topic-chip > button:first-child {
+  padding: 6px 7px 6px 12px;
+}
+
+.topic-chip .topic-delete {
+  color: var(--muted);
+  padding: 0 9px 0 5px;
 }
 
 .topic-chips button small {
@@ -451,8 +481,61 @@ button {
   color: #fff;
 }
 
+.topic-chip.active {
+  background: var(--ink);
+  border-color: var(--ink);
+}
+
+.topic-chip.active button,
+.topic-chip.active small,
 .topic-chips button.active small {
   color: rgba(255, 255, 255, 0.68);
+}
+
+.topic-chip.active button:first-child {
+  color: #fff;
+}
+
+.topic-create-row {
+  align-items: center;
+  display: flex;
+  gap: 8px;
+  justify-content: flex-end;
+}
+
+.topic-create-box {
+  align-items: center;
+  background: var(--bg-soft);
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  color: var(--muted);
+  display: inline-flex;
+  gap: 7px;
+  min-height: 34px;
+  padding: 0 11px;
+}
+
+.topic-create-box input {
+  background: transparent;
+  border: 0;
+  color: var(--ink);
+  min-width: 132px;
+  outline: 0;
+}
+
+.topic-create-row > button {
+  appearance: none;
+  background: #fff;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  color: #3f4740;
+  min-height: 34px;
+  padding: 5px 12px;
+}
+
+.topic-create-row > button:disabled {
+  cursor: default;
+  opacity: 0.45;
 }
 
 .terrain-card {
@@ -1386,6 +1469,11 @@ button {
     justify-content: flex-start;
   }
 
+  .topic-create-row {
+    flex-wrap: wrap;
+    justify-content: flex-start;
+  }
+
   .summary-row {
     grid-template-columns: 1fr 1fr;
   }
@@ -1436,6 +1524,10 @@ button {
 
   .tag-quick-list {
     justify-content: flex-start;
+  }
+
+  .topic-create-box {
+    width: 100%;
   }
 
   .primary-cta,

@@ -1,18 +1,25 @@
 import { formatCurrency, maskMerchant } from './finance';
 import type { FinanceModel } from './types';
 
-export function downloadHTMLReport(model: FinanceModel, masked: boolean): void {
-  const html = createHTMLReport(model, masked);
+export interface ReportTagContext {
+  activeTagName: string;
+  tagSummary: Array<{ name: string; count: number; expense: number }>;
+  transactionTags: Record<string, string[]>;
+}
+
+export function downloadHTMLReport(model: FinanceModel, masked: boolean, tagContext?: ReportTagContext): void {
+  const html = createHTMLReport(model, masked, tagContext);
   const blob = new Blob([html], { type: 'text/html;charset=utf-8' });
   const url = URL.createObjectURL(blob);
   const anchor = document.createElement('a');
   anchor.href = url;
-  anchor.download = `spendarium-report-${model.summary.dateRange.start}-${model.summary.dateRange.end}.html`;
+  const topic = tagContext?.activeTagName ? slugifyFilePart(tagContext.activeTagName) : 'all';
+  anchor.download = `spendarium-report-${topic}-${model.summary.dateRange.start}-${model.summary.dateRange.end}.html`;
   anchor.click();
   URL.revokeObjectURL(url);
 }
 
-export function createHTMLReport(model: FinanceModel, masked: boolean): string {
+export function createHTMLReport(model: FinanceModel, masked: boolean, tagContext?: ReportTagContext): string {
   const categories = model.categories.map((row) => `
     <tr>
       <td>${escapeHTML(row.name)}</td>
@@ -28,6 +35,28 @@ export function createHTMLReport(model: FinanceModel, masked: boolean): string {
       <td>${row.count}</td>
       <td>${(row.pct * 100).toFixed(1)}%</td>
     </tr>`).join('');
+
+  const tagSummary = tagContext?.tagSummary.length
+    ? tagContext.tagSummary.map((row) => `
+      <tr>
+        <td>${escapeHTML(row.name)}</td>
+        <td>${formatCurrency(row.expense)}</td>
+        <td>${row.count}</td>
+      </tr>`).join('')
+    : '<tr><td colspan="3">暂无标签</td></tr>';
+
+  const transactions = model.transactions.map((tx) => {
+    const tags = tagContext?.transactionTags[tx.id] || [];
+    const amount = `${tx.direction === 'income' ? '+' : tx.direction === 'expense' ? '-' : ''}${formatCurrency(tx.amount)}`;
+    return `
+      <tr>
+        <td>${escapeHTML(tx.time)}</td>
+        <td>${escapeHTML(masked ? maskMerchant(tx.counterpart || tx.description) : tx.counterpart || tx.description)}</td>
+        <td>${escapeHTML(tx.type)}</td>
+        <td>${escapeHTML(tags.join(' / ') || '-')}</td>
+        <td>${amount}</td>
+      </tr>`;
+  }).join('');
 
   return `<!doctype html>
 <html lang="zh-CN">
@@ -47,12 +76,13 @@ export function createHTMLReport(model: FinanceModel, masked: boolean): string {
     table { border-collapse: collapse; width: 100%; margin: 18px 0 34px; }
     th, td { border-bottom: 1px solid rgba(255,255,255,.08); padding: 11px 8px; text-align: left; }
     th { color: #c8a44e; font-size: 12px; letter-spacing: .08em; text-transform: uppercase; }
+    .topic { color: #ead79b; font-family: ui-monospace, monospace; }
   </style>
 </head>
 <body>
   <main>
     <h1>Spendarium</h1>
-    <p>消费分析报告 · ${model.summary.dateRange.start} - ${model.summary.dateRange.end}<br />数据由浏览器本地生成，没有上传到服务器。</p>
+    <p>消费分析报告 · ${model.summary.dateRange.start} - ${model.summary.dateRange.end}<br />专题：<span class="topic">${escapeHTML(tagContext?.activeTagName || '全部账单')}</span><br />数据由浏览器本地生成，没有上传到服务器。</p>
     <section class="grid">
       <div class="card"><span class="label">Income</span><strong class="value">${formatCurrency(model.summary.income)}</strong></div>
       <div class="card"><span class="label">Expense</span><strong class="value">${formatCurrency(model.summary.expense)}</strong></div>
@@ -63,9 +93,17 @@ export function createHTMLReport(model: FinanceModel, masked: boolean): string {
     <table><thead><tr><th>分类</th><th>金额</th><th>笔数</th><th>占比</th></tr></thead><tbody>${categories}</tbody></table>
     <h2>Top 商户</h2>
     <table><thead><tr><th>商户</th><th>金额</th><th>笔数</th><th>占比</th></tr></thead><tbody>${merchants}</tbody></table>
+    <h2>标签摘要</h2>
+    <table><thead><tr><th>标签</th><th>支出</th><th>笔数</th></tr></thead><tbody>${tagSummary}</tbody></table>
+    <h2>交易标签明细</h2>
+    <table><thead><tr><th>时间</th><th>商户</th><th>类型</th><th>标签</th><th>金额</th></tr></thead><tbody>${transactions}</tbody></table>
   </main>
 </body>
 </html>`;
+}
+
+function slugifyFilePart(value: string): string {
+  return value.trim().toLowerCase().replace(/[^\p{L}\p{N}]+/gu, '-').replace(/^-|-$/g, '') || 'topic';
 }
 
 function escapeHTML(value: string): string {
