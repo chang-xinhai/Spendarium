@@ -697,7 +697,7 @@ button {
   display: flex;
   font-size: 0.78rem;
   gap: 14px;
-  justify-content: space-between;
+  justify-content: flex-end;
   margin-top: 10px;
 }
 

@@ -24,11 +24,12 @@ interface TagState {
 }
 
 const DEFAULT_TAGS: TopicTag[] = [
-  { id: 'topic_motorcycle', name: '摩托车' },
+  { id: 'topic_food', name: '美食' },
   { id: 'topic_travel', name: '旅行' },
   { id: 'topic_learning', name: '学习' },
   { id: 'topic_health', name: '健康' },
 ];
+const LEGACY_DEFAULT_TAG_IDS = new Set(['topic_motorcycle']);
 
 export default function SpendariumApp() {
   const demo = useMemo(() => makeDemoTransactions(), []);
@@ -449,7 +450,6 @@ function Heatmap({ model }: { model: FinanceModel }) {
         </div>
       </div>
       <div className="heatmap-caption">
-        <span>{heatmap.caption}</span>
         <span>{heatmap.rangeLabel}</span>
       </div>
       {hovered ? (
@@ -715,7 +715,7 @@ function TransactionTable({ assignTag, createTag, masked, model, removeTag, tagS
         <span>{selectedIds.length ? `已选 ${selectedIds.length} 条` : '选中交易后批量打标签'}</span>
         <label className="tag-create-box">
           <Plus size={14} />
-          <input value={tagDraft} onChange={(event) => setTagDraft(event.target.value)} placeholder="新建标签，例如摩托车" onKeyDown={(event) => {
+          <input value={tagDraft} onChange={(event) => setTagDraft(event.target.value)} placeholder="新建标签" onKeyDown={(event) => {
             if (event.key === 'Enter') createAndAssign();
           }} />
         </label>
@@ -849,11 +849,8 @@ function buildHeatmap(model: FinanceModel, view: HeatmapView, todayKey: string) 
   const months = buildHeatmapMonths(start, displayStart, displayEnd, weeks.length);
   const activeDays = days.filter((day) => day.inRange && !day.future && day.expense > 0).length;
   const yearLabel = isRolling ? `最近一年 · 截至今天` : `${view.year} 年`;
-  const caption = isRolling
-    ? '默认像 GitHub 一样显示最近 365 天；导入多份跨年账单后，旧年份可以从右侧单独打开。'
-    : `${view.year} 自然年视图；未来日期保留为空格，方便和全年节奏对齐。`;
   const rangeLabel = `${toDateKey(displayStart)} - ${toDateKey(displayEnd)}`;
-  return { weeks, months, yearLabel, activeDays, caption, rangeLabel };
+  return { weeks, months, yearLabel, activeDays, rangeLabel };
 }
 
 function buildHeatmapMonths(calendarStart: Date, labelStart: Date, calendarEnd: Date, weekCount: number) {
@@ -957,11 +954,23 @@ function loadTagState(): TagState {
     const raw = window.localStorage.getItem(TAG_STORAGE_KEY);
     if (!raw) return { tags: DEFAULT_TAGS, assignments: {} };
     const parsed = JSON.parse(raw) as Partial<TagState>;
+    const assignedTagIds = new Set<string>();
+    if (parsed.assignments && typeof parsed.assignments === 'object') {
+      for (const values of Object.values(parsed.assignments)) {
+        if (!Array.isArray(values)) continue;
+        for (const value of values) {
+          if (typeof value === 'string') assignedTagIds.add(value);
+        }
+      }
+    }
     const savedTags = Array.isArray(parsed.tags)
-      ? parsed.tags.filter((tag): tag is TopicTag => typeof tag?.id === 'string' && typeof tag?.name === 'string')
+      ? parsed.tags
+        .filter((tag): tag is TopicTag => typeof tag?.id === 'string' && typeof tag?.name === 'string')
+        .filter((tag) => !LEGACY_DEFAULT_TAG_IDS.has(tag.id) || assignedTagIds.has(tag.id))
       : [];
-    const tagIds = new Set(savedTags.map((tag) => tag.id));
-    const tags = [...DEFAULT_TAGS.filter((tag) => !tagIds.has(tag.id)), ...savedTags];
+    const defaultTagIds = new Set(DEFAULT_TAGS.map((tag) => tag.id));
+    const customTags = savedTags.filter((tag) => !defaultTagIds.has(tag.id));
+    const tags = [...DEFAULT_TAGS, ...customTags];
     const assignments: Record<string, string[]> = {};
     if (parsed.assignments && typeof parsed.assignments === 'object') {
       for (const [txId, values] of Object.entries(parsed.assignments)) {
