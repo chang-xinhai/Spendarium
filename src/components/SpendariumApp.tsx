@@ -1,5 +1,5 @@
 import { toPng } from 'html-to-image';
-import { ArrowLeft, Code2, Download, FileText, Search, UploadCloud } from 'lucide-react';
+import { ArrowLeft, Code2, Download, FileText, Plus, Search, Tags, UploadCloud, X } from 'lucide-react';
 import { useEffect, useMemo, useRef, useState, type PointerEvent as ReactPointerEvent, type ReactNode } from 'react';
 import { CATEGORIES } from '../lib/categories';
 import { downloadHTMLReport } from '../lib/exportReport';
@@ -11,6 +11,24 @@ import TerrainMap from './TerrainMap';
 
 const APP_BASE = import.meta.env.BASE_URL || '/';
 const CATEGORY_KEYS = Object.keys(CATEGORIES) as CategoryKey[];
+const TAG_STORAGE_KEY = 'spendarium.tag-state.v1';
+
+interface TopicTag {
+  id: string;
+  name: string;
+}
+
+interface TagState {
+  tags: TopicTag[];
+  assignments: Record<string, string[]>;
+}
+
+const DEFAULT_TAGS: TopicTag[] = [
+  { id: 'topic_motorcycle', name: '摩托车' },
+  { id: 'topic_travel', name: '旅行' },
+  { id: 'topic_learning', name: '学习' },
+  { id: 'topic_health', name: '健康' },
+];
 
 export default function SpendariumApp() {
   const demo = useMemo(() => makeDemoTransactions(), []);
@@ -18,13 +36,29 @@ export default function SpendariumApp() {
   const [view, setView] = useState<'landing' | 'workspace'>('landing');
   const [masked, setMasked] = useState(false);
   const [error, setError] = useState('');
+  const [tagState, setTagState] = useState<TagState>(() => loadTagState());
+  const [activeTagId, setActiveTagId] = useState<string>('all');
   const exportRef = useRef<HTMLDivElement>(null);
-  const model = useMemo(() => buildFinanceModel(transactions.length ? transactions : demo), [transactions, demo]);
+  const sourceTransactions = useMemo(() => transactions.length ? transactions : demo, [transactions, demo]);
+  const baseModel = useMemo(() => buildFinanceModel(sourceTransactions), [sourceTransactions]);
+  const scopedTransactions = useMemo(
+    () => activeTagId === 'all' ? sourceTransactions : sourceTransactions.filter((tx) => tagState.assignments[tx.id]?.includes(activeTagId)),
+    [activeTagId, sourceTransactions, tagState.assignments],
+  );
+  const model = useMemo(() => buildFinanceModel(scopedTransactions), [scopedTransactions]);
   const previewModel = useMemo(() => buildFinanceModel(demo), [demo]);
 
   useEffect(() => {
     window.scrollTo({ left: 0, top: 0 });
   }, [view]);
+
+  useEffect(() => {
+    saveTagState(tagState);
+  }, [tagState]);
+
+  useEffect(() => {
+    if (activeTagId !== 'all' && !tagState.tags.some((tag) => tag.id === activeTagId)) setActiveTagId('all');
+  }, [activeTagId, tagState.tags]);
 
   async function handleFiles(files: FileList | null) {
     if (!files?.length) return;
@@ -48,6 +82,39 @@ export default function SpendariumApp() {
     setView('workspace');
   }
 
+  function createTag(name: string) {
+    const clean = normalizeTagName(name);
+    if (!clean) return '';
+    const existing = tagState.tags.find((tag) => tag.name.toLowerCase() === clean.toLowerCase());
+    if (existing) return existing.id;
+    const nextTag = { id: makeTagId(clean), name: clean };
+    setTagState((current) => ({ ...current, tags: [...current.tags, nextTag] }));
+    return nextTag.id;
+  }
+
+  function assignTag(txIds: string[], tagId: string) {
+    if (!txIds.length || !tagId) return;
+    setTagState((current) => {
+      const assignments = { ...current.assignments };
+      for (const id of txIds) {
+        const existing = assignments[id] || [];
+        if (!existing.includes(tagId)) assignments[id] = [...existing, tagId];
+      }
+      return { ...current, assignments };
+    });
+  }
+
+  function removeTag(txId: string, tagId: string) {
+    setTagState((current) => {
+      const existing = current.assignments[txId] || [];
+      const next = existing.filter((id) => id !== tagId);
+      const assignments = { ...current.assignments };
+      if (next.length) assignments[txId] = next;
+      else delete assignments[txId];
+      return { ...current, assignments };
+    });
+  }
+
   async function exportPNG() {
     if (!exportRef.current) return;
     const dataUrl = await toPng(exportRef.current, { cacheBust: true, pixelRatio: 2, backgroundColor: '#ffffff' });
@@ -61,9 +128,16 @@ export default function SpendariumApp() {
     <Landing preview={previewModel} onFiles={handleFiles} onSample={useSample} error={error} />
   ) : (
     <Workspace
+      baseModel={baseModel}
       model={model}
       masked={masked}
       setMasked={setMasked}
+      tagState={tagState}
+      activeTagId={activeTagId}
+      setActiveTagId={setActiveTagId}
+      createTag={createTag}
+      assignTag={assignTag}
+      removeTag={removeTag}
       onFiles={handleFiles}
       onSample={useSample}
       onBack={() => setView('landing')}
@@ -138,10 +212,33 @@ function Landing({ preview, onFiles, onSample, error }: {
   );
 }
 
-function Workspace({ model, masked, setMasked, onFiles, onSample, onBack, onExportPNG, exportRef }: {
+function Workspace({
+  baseModel,
+  model,
+  masked,
+  setMasked,
+  tagState,
+  activeTagId,
+  setActiveTagId,
+  createTag,
+  assignTag,
+  removeTag,
+  onFiles,
+  onSample,
+  onBack,
+  onExportPNG,
+  exportRef,
+}: {
+  baseModel: FinanceModel;
   model: FinanceModel;
   masked: boolean;
   setMasked: (value: boolean) => void;
+  tagState: TagState;
+  activeTagId: string;
+  setActiveTagId: (tagId: string) => void;
+  createTag: (name: string) => string;
+  assignTag: (txIds: string[], tagId: string) => void;
+  removeTag: (txId: string, tagId: string) => void;
   onFiles: (files: FileList | null) => void;
   onSample: () => void;
   onBack: () => void;
@@ -154,7 +251,7 @@ function Workspace({ model, masked, setMasked, onFiles, onSample, onBack, onExpo
         <button className="ghost-button" onClick={onBack}><ArrowLeft size={17} /> 首页</button>
         <div>
           <h1>消费地形报告</h1>
-          <p>{model.summary.dateRange.start} - {model.summary.dateRange.end} · {model.summary.count} 笔记录</p>
+          <p>{model.summary.dateRange.start} - {model.summary.dateRange.end} · {model.summary.count} 笔记录{activeTagId !== 'all' ? ' · 专题视图' : ''}</p>
         </div>
         <div className="workspace-actions">
           <label className="small-button"><UploadCloud size={16} /> 上传<input type="file" accept=".csv,.txt" multiple onChange={(event) => onFiles(event.target.files)} /></label>
@@ -163,6 +260,15 @@ function Workspace({ model, masked, setMasked, onFiles, onSample, onBack, onExpo
           <button className="small-button" onClick={() => downloadHTMLReport(model, masked)}><FileText size={16} /> HTML</button>
         </div>
       </header>
+
+      <TopicScopeBar
+        activeTagId={activeTagId}
+        assignments={tagState.assignments}
+        baseModel={baseModel}
+        model={model}
+        setActiveTagId={setActiveTagId}
+        tags={tagState.tags}
+      />
 
       <section className="terrain-card">
         <div className="terrain-copy">
@@ -199,10 +305,52 @@ function Workspace({ model, masked, setMasked, onFiles, onSample, onBack, onExpo
           <DailySpendChart model={model} />
         </Panel>
         <Panel title="交易明细" span="full" right={<label className="mask-toggle"><input type="checkbox" checked={masked} onChange={(event) => setMasked(event.target.checked)} /> 隐藏商户</label>}>
-          <TransactionTable model={model} masked={masked} />
+          <TransactionTable
+            assignTag={assignTag}
+            createTag={createTag}
+            masked={masked}
+            model={model}
+            removeTag={removeTag}
+            tagState={tagState}
+          />
         </Panel>
       </section>
     </main>
+  );
+}
+
+function TopicScopeBar({ activeTagId, assignments, baseModel, model, setActiveTagId, tags }: {
+  activeTagId: string;
+  assignments: Record<string, string[]>;
+  baseModel: FinanceModel;
+  model: FinanceModel;
+  setActiveTagId: (tagId: string) => void;
+  tags: TopicTag[];
+}) {
+  const stats = useMemo(() => buildTagStats(baseModel.transactions, tags, assignments), [assignments, baseModel.transactions, tags]);
+  const activeName = activeTagId === 'all' ? '全部账单' : tags.find((tag) => tag.id === activeTagId)?.name || '专题';
+
+  return (
+    <section className="topic-scope" aria-label="专题筛选">
+      <div className="topic-scope-copy">
+        <span><Tags size={15} /> 专题视图</span>
+        <strong>{activeName}</strong>
+        <em>{model.summary.count} 笔 · {formatCurrency(model.summary.expense)} 支出</em>
+      </div>
+      <div className="topic-chips">
+        <button className={activeTagId === 'all' ? 'active' : ''} type="button" onClick={() => setActiveTagId('all')}>
+          All <small>{baseModel.summary.count}</small>
+        </button>
+        {tags.map((tag) => {
+          const tagStats = stats.get(tag.id) || { count: 0, expense: 0 };
+          return (
+            <button className={activeTagId === tag.id ? 'active' : ''} key={tag.id} type="button" onClick={() => setActiveTagId(tag.id)}>
+              {tag.name} <small>{tagStats.count}</small>
+            </button>
+          );
+        })}
+      </div>
+    </section>
   );
 }
 
@@ -483,13 +631,56 @@ function DailySpendChart({ model }: { model: FinanceModel }) {
   );
 }
 
-function TransactionTable({ model, masked }: { model: FinanceModel; masked: boolean }) {
+function TransactionTable({ assignTag, createTag, masked, model, removeTag, tagState }: {
+  assignTag: (txIds: string[], tagId: string) => void;
+  createTag: (name: string) => string;
+  masked: boolean;
+  model: FinanceModel;
+  removeTag: (txId: string, tagId: string) => void;
+  tagState: TagState;
+}) {
   const [query, setQuery] = useState('');
   const [category, setCategory] = useState<'all' | CategoryKey>('all');
   const [direction, setDirection] = useState<'all' | Direction>('all');
   const [sort, setSort] = useState<'time-desc' | 'time-asc' | 'amount-desc' | 'amount-asc' | 'merchant-asc'>('time-desc');
+  const [selectedIds, setSelectedIds] = useState<string[]>([]);
+  const [tagDraft, setTagDraft] = useState('');
   const filtered = useMemo(() => filterTransactions(model.transactions, { query, category, direction, sort }), [model.transactions, query, category, direction, sort]);
   const shown = filtered.slice(0, 200);
+  const selectedSet = useMemo(() => new Set(selectedIds), [selectedIds]);
+  const tagById = useMemo(() => new Map(tagState.tags.map((tag) => [tag.id, tag])), [tagState.tags]);
+  const allShownSelected = shown.length > 0 && shown.every((tx) => selectedSet.has(tx.id));
+
+  useEffect(() => {
+    const visibleIds = new Set(model.transactions.map((tx) => tx.id));
+    setSelectedIds((current) => current.filter((id) => visibleIds.has(id)));
+  }, [model.transactions]);
+
+  function toggleSelected(txId: string) {
+    setSelectedIds((current) => current.includes(txId) ? current.filter((id) => id !== txId) : [...current, txId]);
+  }
+
+  function toggleShown() {
+    const shownIds = shown.map((tx) => tx.id);
+    if (allShownSelected) {
+      const shownSet = new Set(shownIds);
+      setSelectedIds((current) => current.filter((id) => !shownSet.has(id)));
+    } else {
+      setSelectedIds((current) => Array.from(new Set([...current, ...shownIds])));
+    }
+  }
+
+  function assignSelected(tagId: string) {
+    if (!selectedIds.length) return;
+    assignTag(selectedIds, tagId);
+  }
+
+  function createAndAssign() {
+    const tagId = createTag(tagDraft);
+    if (!tagId || !selectedIds.length) return;
+    assignTag(selectedIds, tagId);
+    setTagDraft('');
+  }
 
   return (
     <div className="tx-module">
@@ -517,14 +708,47 @@ function TransactionTable({ model, masked }: { model: FinanceModel; masked: bool
         </select>
         <span className="tx-count">{filtered.length} 条匹配</span>
       </div>
+      <div className="tx-tag-bar">
+        <button className="tx-action-button" disabled={!shown.length} type="button" onClick={toggleShown}>
+          {allShownSelected ? '取消当前' : '选择当前'}
+        </button>
+        <span>{selectedIds.length ? `已选 ${selectedIds.length} 条` : '选中交易后批量打标签'}</span>
+        <label className="tag-create-box">
+          <Plus size={14} />
+          <input value={tagDraft} onChange={(event) => setTagDraft(event.target.value)} placeholder="新建标签，例如摩托车" onKeyDown={(event) => {
+            if (event.key === 'Enter') createAndAssign();
+          }} />
+        </label>
+        <button className="tx-action-button primary" disabled={!selectedIds.length || !normalizeTagName(tagDraft)} type="button" onClick={createAndAssign}>添加</button>
+        <div className="tag-quick-list" aria-label="已有标签">
+          {tagState.tags.map((tag) => (
+            <button disabled={!selectedIds.length} key={tag.id} type="button" onClick={() => assignSelected(tag.id)}>{tag.name}</button>
+          ))}
+        </div>
+      </div>
       <div className="tx-table">
         {shown.length ? shown.map((tx) => {
           const cat = CATEGORIES[tx.category];
+          const txTags = (tagState.assignments[tx.id] || []).map((id) => tagById.get(id)).filter(Boolean) as TopicTag[];
           return (
             <div className="tx-row" key={tx.id}>
+              <label className="tx-select" aria-label={`选择 ${tx.time} 的交易`}>
+                <input checked={selectedSet.has(tx.id)} type="checkbox" onChange={() => toggleSelected(tx.id)} />
+              </label>
               <span>{tx.time}</span>
-              <b>{masked ? maskMerchant(tx.counterpart || tx.description) : tx.counterpart || tx.description}</b>
-              <em style={{ color: cat.color, borderColor: `${cat.color}44` }}><i style={{ background: cat.color }} />{cat.name}</em>
+              <div className="tx-merchant">
+                <b>{masked ? maskMerchant(tx.counterpart || tx.description) : tx.counterpart || tx.description}</b>
+                {txTags.length ? (
+                  <div className="tx-tags">
+                    {txTags.map((tag) => (
+                      <button key={tag.id} type="button" onClick={() => removeTag(tx.id, tag.id)}>
+                        {tag.name}<X size={11} />
+                      </button>
+                    ))}
+                  </div>
+                ) : null}
+              </div>
+              <em className="tx-category" style={{ color: cat.color, borderColor: `${cat.color}44` }}><i style={{ background: cat.color }} />{cat.name}</em>
               <small>{sourceLabel(tx.source)}</small>
               <strong className={tx.direction}>{tx.direction === 'income' ? '+' : tx.direction === 'expense' ? '-' : ''}{formatCurrency(tx.amount)}</strong>
             </div>
@@ -711,6 +935,59 @@ function filterTransactions(transactions: Transaction[], filters: {
       if (filters.sort === 'merchant-asc') return (a.counterpart || a.description).localeCompare(b.counterpart || b.description, 'zh-CN');
       return b.timestamp - a.timestamp;
     });
+}
+
+function buildTagStats(transactions: Transaction[], tags: TopicTag[], assignments: Record<string, string[]>) {
+  const stats = new Map(tags.map((tag) => [tag.id, { count: 0, expense: 0 }]));
+  for (const tx of transactions) {
+    const txTags = assignments[tx.id] || [];
+    for (const tagId of txTags) {
+      const current = stats.get(tagId);
+      if (!current) continue;
+      if (tx.direction !== 'neutral') current.count += 1;
+      if (tx.direction === 'expense') current.expense += tx.amount;
+    }
+  }
+  return stats;
+}
+
+function loadTagState(): TagState {
+  if (typeof window === 'undefined') return { tags: DEFAULT_TAGS, assignments: {} };
+  try {
+    const raw = window.localStorage.getItem(TAG_STORAGE_KEY);
+    if (!raw) return { tags: DEFAULT_TAGS, assignments: {} };
+    const parsed = JSON.parse(raw) as Partial<TagState>;
+    const savedTags = Array.isArray(parsed.tags)
+      ? parsed.tags.filter((tag): tag is TopicTag => typeof tag?.id === 'string' && typeof tag?.name === 'string')
+      : [];
+    const tagIds = new Set(savedTags.map((tag) => tag.id));
+    const tags = [...DEFAULT_TAGS.filter((tag) => !tagIds.has(tag.id)), ...savedTags];
+    const assignments: Record<string, string[]> = {};
+    if (parsed.assignments && typeof parsed.assignments === 'object') {
+      for (const [txId, values] of Object.entries(parsed.assignments)) {
+        if (!Array.isArray(values)) continue;
+        const clean = values.filter((value): value is string => typeof value === 'string' && tags.some((tag) => tag.id === value));
+        if (clean.length) assignments[txId] = Array.from(new Set(clean));
+      }
+    }
+    return { tags, assignments };
+  } catch {
+    return { tags: DEFAULT_TAGS, assignments: {} };
+  }
+}
+
+function saveTagState(state: TagState) {
+  if (typeof window === 'undefined') return;
+  window.localStorage.setItem(TAG_STORAGE_KEY, JSON.stringify(state));
+}
+
+function normalizeTagName(name: string) {
+  return name.trim().replace(/\s+/g, ' ').slice(0, 18);
+}
+
+function makeTagId(name: string) {
+  const slug = Array.from(name).map((char) => char.charCodeAt(0).toString(36)).join('').slice(0, 24);
+  return `topic_${slug}_${Date.now().toString(36)}`;
 }
 
 function sourceLabel(source: Transaction['source']) {
