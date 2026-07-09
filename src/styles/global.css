@@ -232,6 +232,76 @@ button {
   font-size: 0.84rem;
 }
 
+.bill-support {
+  align-items: center;
+  color: var(--muted);
+  display: flex;
+  flex-wrap: wrap;
+  font-size: 0.8rem;
+  gap: 10px;
+  margin-top: 10px;
+}
+
+.bill-support > span {
+  color: #555d57;
+  font-weight: 700;
+}
+
+.bill-support-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.pay-badge {
+  align-items: center;
+  background: rgba(255, 255, 255, 0.78);
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  color: #3f4740;
+  display: inline-flex;
+  font-style: normal;
+  gap: 7px;
+  min-height: 34px;
+  padding: 6px 11px 6px 8px;
+  white-space: nowrap;
+}
+
+.payment-mark {
+  align-items: center;
+  border-radius: 8px;
+  color: #fff;
+  display: inline-flex;
+  height: 22px;
+  justify-content: center;
+  width: 22px;
+}
+
+.payment-mark.wechat {
+  background: #07c160;
+}
+
+.payment-mark.alipay {
+  background: #1677ff;
+  font-family: var(--font-sans);
+  font-size: 0.82rem;
+  font-weight: 800;
+}
+
+.payment-mark svg {
+  height: 18px;
+  overflow: visible;
+  width: 18px;
+}
+
+.payment-mark path {
+  fill: none;
+  stroke: currentColor;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  stroke-width: 1.55;
+}
+
 .landing-error,
 .empty-state {
   background: rgba(217, 109, 98, 0.08);
@@ -1540,6 +1610,12 @@ button {
     align-items: flex-start;
     flex-direction: column;
     gap: 7px;
+  }
+
+  .bill-support {
+    align-items: flex-start;
+    flex-direction: column;
+    gap: 8px;
   }
 
   .preview-rail,

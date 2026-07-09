@@ -220,6 +220,13 @@ function Landing({ preview, onFiles, onSample, error }: {
             <span>隐私</span>
             <code>所有解析都在浏览器本地完成</code>
           </div>
+          <div className="bill-support" aria-label="支持导入的账单">
+            <span>支持导入</span>
+            <div className="bill-support-list">
+              <span className="pay-badge"><PaymentMark type="wechat" /> 微信支付账单</span>
+              <span className="pay-badge"><PaymentMark type="alipay" /> 支付宝账单</span>
+            </div>
+          </div>
           {error ? <div className="landing-error">{error}</div> : null}
         </div>
 
@@ -423,6 +430,22 @@ function TopicScopeBar({ activeTagId, assignments, baseModel, createTag, deleteT
 
 function MiniMetric({ label, value }: { label: string; value: string }) {
   return <div className="mini-metric"><span>{label}</span><strong>{value}</strong></div>;
+}
+
+function PaymentMark({ type }: { type: 'wechat' | 'alipay' }) {
+  return (
+    <span className={`payment-mark ${type}`} aria-hidden="true">
+      {type === 'wechat' ? (
+        <svg viewBox="0 0 24 24">
+          <path d="M9.4 7.2c-3.1 0-5.6 1.9-5.6 4.4 0 1.3.8 2.6 2 3.4l-.4 1.6 1.8-.9c.7.2 1.4.3 2.2.3 3.1 0 5.6-1.9 5.6-4.4S12.5 7.2 9.4 7.2Z" />
+          <path d="M14.6 10.3c2.7.2 4.8 1.9 4.8 4.1 0 1.2-.7 2.3-1.8 3.1l.4 1.3-1.6-.8c-.6.2-1.2.3-1.8.3-2.3 0-4.3-1.2-4.8-2.9" />
+          <path d="M7.5 10.6h.1M11.1 10.6h.1M13.5 13.7h.1M16.6 13.7h.1" />
+        </svg>
+      ) : (
+        <span>支</span>
+      )}
+    </span>
+  );
 }
 
 function SummaryCard({ label, value }: { label: string; value: string }) {
