@@ -357,14 +357,43 @@ function MerchantList({ model, masked }: { model: FinanceModel; masked: boolean 
 
 function MonthlyTrend({ model }: { model: FinanceModel }) {
   const max = Math.max(...model.monthly.flatMap((month) => [month.income, month.expense]), 1);
+  const totals = model.monthly.reduce((sum, month) => ({
+    income: sum.income + month.income,
+    expense: sum.expense + month.expense,
+  }), { income: 0, expense: 0 });
+
   return (
     <div className="month-trend">
-      {model.monthly.map((month) => (
-        <div className="month-col" key={month.month}>
-          <div><i className="income" style={{ height: `${Math.max(5, month.income / max * 122)}px` }} /><i className="expense" style={{ height: `${Math.max(5, month.expense / max * 122)}px` }} /></div>
-          <span>{month.month}</span>
-        </div>
-      ))}
+      <div className="month-trend-legend">
+        <span><i className="income" />收入 <strong>{formatCurrency(totals.income)}</strong></span>
+        <span><i className="expense" />支出 <strong>{formatCurrency(totals.expense)}</strong></span>
+      </div>
+      <div className="month-trend-chart">
+        {model.monthly.map((month) => (
+          <div
+            aria-label={`${month.month} 收入 ${formatCurrency(month.income)}，支出 ${formatCurrency(month.expense)}`}
+            className="month-col"
+            key={month.month}
+            title={`${month.month}\n收入 ${formatCurrency(month.income)}\n支出 ${formatCurrency(month.expense)}`}
+          >
+            <div className="month-bars">
+              <span className="month-bar-wrap income-wrap">
+                <em>{formatCompactCurrency(month.income)}</em>
+                <i className="income" style={{ height: `${Math.max(5, month.income / max * 152)}px` }} />
+              </span>
+              <span className="month-bar-wrap expense-wrap">
+                <em>{formatCompactCurrency(month.expense)}</em>
+                <i className="expense" style={{ height: `${Math.max(5, month.expense / max * 152)}px` }} />
+              </span>
+            </div>
+            <span className="month-label">{month.month}</span>
+            <div className="month-values">
+              <em className="income">收 {formatCompactCurrency(month.income)}</em>
+              <em className="expense">支 {formatCompactCurrency(month.expense)}</em>
+            </div>
+          </div>
+        ))}
+      </div>
     </div>
   );
 }
