@@ -1,59 +1,182 @@
 # Spendarium
 
-Spendarium is a privacy-first spending analysis webpage for WeChat Pay and Alipay CSV exports.
+**Local-first Spending Atlas for WeChat Pay, Alipay, and CSV bills**
 
-The product direction is **a local-first finance terrain map**: a quiet macOS-style landing page, a meaningful Three.js spending landscape, and a detailed report workspace after upload.
+[Live Demo](https://chang-xinhai.github.io/Spendarium/) · [GitHub](https://github.com/chang-xinhai/Spendarium)
 
-## What It Does
+Spendarium turns everyday payment records into a private, visual finance report. Upload exported bills from WeChat Pay, Alipay, or compatible CSV files, then inspect your spending as heatmaps, category structures, merchant rankings, monthly trends, transaction tags, and a Three.js terrain map.
 
-- Upload WeChat Pay / Alipay CSV exports in the browser.
-- Parse and categorize transactions locally.
-- Start with a public-facing landing page instead of exposing demo data immediately.
-- Turn spending into an interactive Three.js terrain: time is the horizontal axis, categories are rows, and amount becomes height, ridges, and contours.
-- Show total income, total spend, savings, daily average, max spend day, category structure, top merchants, spending insights, and transaction details after upload.
-- Preserve the useful analysis surfaces: spending heatmap, category breakdown, merchant ranking, monthly trend, daily spend line, and transaction table.
-- Export the current view as PNG.
-- Export a standalone HTML finance report.
-- Keep user data local by default. No account, no backend, no upload.
+> Privacy first: all parsing and analysis run inside your browser. Your bills do not leave your computer.
 
-## Stack
+---
 
-- Astro
-- React
-- Three.js via `@react-three/fiber`
-- `html-to-image` for PNG export
-- GitHub Pages deployment via GitHub Actions
+## Features
 
-## Local Development
+| Feature | Description |
+| --- | --- |
+| **WeChat Pay / Alipay Import** | Parse exported payment bills from WeChat Pay and Alipay, with fallback support for generic CSV files. |
+| **Local Browser Parsing** | Read files through the browser File API; no backend, account, or remote upload required. |
+| **Spending Terrain** | Render a Three.js financial landscape where time, category, and spending amount become a readable terrain. |
+| **GitHub-style Heatmap** | Show the latest 365 days by default, with year-level views for cross-year bills. |
+| **Topic Tags** | Create, delete, and assign multiple tags to transactions for hobbies, trips, projects, or life events. |
+| **Detailed Report Workspace** | Review summary cards, category breakdowns, top merchants, monthly cashflow, daily spending, and transaction details. |
+| **Privacy Mask** | Hide merchant names when exporting or sharing a report. |
+| **PNG / HTML Export** | Export the current report as an image or a standalone HTML file, including tag context. |
 
-```bash
-npm install
-npm run dev
-npm run build
-```
+---
 
-## Privacy Model
+## Quick Start
 
-Spendarium is designed for GitHub Pages and other static hosts.
+### Online
 
-CSV files are read with the browser File API. The app does not send records to a server. The public repo must not include real payment CSV files.
-
-## Deployment
-
-The repository is configured for GitHub Pages at:
+Open the hosted site:
 
 ```txt
 https://chang-xinhai.github.io/Spendarium/
 ```
 
-The GitHub Actions workflow builds Astro and uploads `dist/` to Pages.
+Then upload exported bills from WeChat Pay, Alipay, or a compatible CSV file. You can also click **试用示例** to explore with demo data.
 
-## Product Notes
+### Local Development
 
-This is not meant to compete with full accounting tools. The product point is a beautiful, private, shareable spending atlas:
+```bash
+git clone https://github.com/chang-xinhai/Spendarium.git
+cd Spendarium
+npm install
+npm run dev
+```
 
-- more expressive than a spreadsheet;
-- safer than uploading bills to a random SaaS;
-- easier to use than a hand-built dashboard;
-- visually strong enough to feel like a real personal finance object;
-- analytical enough that the terrain tells a story instead of acting as decoration.
+Build the static site:
+
+```bash
+npm run build
+```
+
+Preview the production build:
+
+```bash
+npm run preview
+```
+
+---
+
+## Supported Bills
+
+| Source | Status | Notes |
+| --- | --- | --- |
+| **WeChat Pay** | Supported | Detects `微信支付账单` exports or files with `微信` in the filename. |
+| **Alipay** | Supported | Detects `支付宝` / `交易分类` exports or files with `支付宝` in the filename. |
+| **Generic CSV** | Supported | Requires columns such as date/time and amount; optional merchant/category/direction fields improve the report. |
+
+Spendarium can import multiple files at once. Transactions are merged and sorted locally before analysis.
+
+---
+
+## How It Works
+
+```txt
+Payment CSV files
+      │
+      ▼
+Browser File API
+      │
+      ▼
+Local parser and category rules
+      │
+      ▼
+Finance model
+      │
+      ├── Spending terrain
+      ├── Heatmap
+      ├── Category and merchant analysis
+      ├── Monthly / daily trends
+      ├── Topic tag views
+      └── PNG / HTML export
+```
+
+The app is designed as a static website. It can run on GitHub Pages because all meaningful work happens in the browser.
+
+---
+
+## Privacy Model
+
+- Files are parsed locally in the browser.
+- No bill data is sent to a server.
+- No login, account system, or hosted database is required.
+- Topic tags are stored in browser `localStorage`.
+- Exports are generated locally from the current report view.
+- Do not commit real payment CSV files or screenshots containing private transactions.
+
+---
+
+## Tech Stack
+
+| Layer | Tooling |
+| --- | --- |
+| Framework | Astro |
+| UI | React |
+| 3D | Three.js, `@react-three/fiber`, `@react-three/drei` |
+| Export | `html-to-image`, standalone HTML generation |
+| Deployment | GitHub Pages + GitHub Actions |
+
+---
+
+## Project Structure
+
+```txt
+src/
+├── components/
+│   ├── SpendariumApp.tsx    # Main app composition
+│   └── TerrainMap.tsx       # Three.js spending terrain
+├── lib/
+│   ├── parser.ts            # WeChat Pay / Alipay / CSV parsing
+│   ├── finance.ts           # Finance model and summaries
+│   ├── categories.ts        # Category rules
+│   ├── exportReport.ts      # Standalone HTML export
+│   └── sampleData.ts        # Deterministic demo data
+├── pages/
+│   └── index.astro
+└── styles/
+    └── global.css
+```
+
+---
+
+## FAQ
+
+**Q: Does Spendarium upload my bill data?**
+
+A: No. The current version parses files locally in the browser and does not use a backend.
+
+**Q: Can I use bills across multiple years?**
+
+A: Yes. The heatmap shows the latest 365 days by default and lets you switch to individual years.
+
+**Q: Can one transaction have multiple tags?**
+
+A: Yes. A transaction can belong to multiple topic tags, such as `旅行`, `学习`, or a custom hobby/project tag.
+
+**Q: Can I share a report without exposing merchant names?**
+
+A: Yes. Enable the merchant privacy mask before exporting PNG or HTML.
+
+**Q: Is this a full accounting app?**
+
+A: No. Spendarium is closer to a private spending atlas: visual, inspectable, and lightweight, not a full bookkeeping system.
+
+---
+
+## Deployment
+
+This repository is configured for GitHub Pages:
+
+```txt
+site: https://chang-xinhai.github.io
+base: /Spendarium
+```
+
+The GitHub Actions workflow builds Astro and publishes `dist/` to Pages.
+
+---
+
+Made by [chang-xinhai](https://github.com/chang-xinhai).
