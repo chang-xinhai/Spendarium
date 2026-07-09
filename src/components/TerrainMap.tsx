@@ -18,7 +18,7 @@ export default function TerrainMap({ transactions, compact = false }: TerrainMap
   return (
     <Canvas
       orthographic
-      shadows
+      shadows={{ type: THREE.PCFShadowMap }}
       camera={{ position: [4.7, compact ? 5.7 : 6.3, compact ? 5.8 : 6.4], zoom: compact ? 68 : 80, near: 0.1, far: 100 }}
       dpr={[1, 1.75]}
       gl={{ antialias: true, alpha: true, preserveDrawingBuffer: true, powerPreference: 'high-performance' }}

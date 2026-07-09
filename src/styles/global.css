@@ -543,6 +543,13 @@ button {
   text-align: right;
 }
 
+.heatmap-layout {
+  align-items: start;
+  display: grid;
+  gap: 18px;
+  grid-template-columns: minmax(0, 1fr) 124px;
+}
+
 .heatmap-legend {
   align-items: center;
   display: flex;
@@ -563,6 +570,52 @@ button {
   grid-template-columns: 24px minmax(0, 1fr);
   overflow-x: auto;
   padding-bottom: 8px;
+}
+
+.heatmap-years {
+  display: grid;
+  gap: 8px;
+}
+
+.heatmap-years button {
+  appearance: none;
+  background: transparent;
+  border: 0;
+  border-radius: 8px;
+  color: #58606a;
+  font-family: var(--font-mono);
+  font-size: 0.76rem;
+  min-height: 36px;
+  padding: 8px 12px;
+  text-align: left;
+  transition: background 140ms ease, color 140ms ease;
+}
+
+.heatmap-years button:hover,
+.heatmap-years button:focus-visible {
+  background: #f1f5f2;
+  color: var(--ink);
+  outline: 0;
+}
+
+.heatmap-years button.active {
+  background: #0969da;
+  color: #fff;
+}
+
+.heatmap-caption {
+  align-items: center;
+  color: var(--muted);
+  display: flex;
+  font-size: 0.78rem;
+  gap: 14px;
+  justify-content: space-between;
+  margin-top: 10px;
+}
+
+.heatmap-caption span:last-child {
+  font-family: var(--font-mono);
+  white-space: nowrap;
 }
 
 .day-labels {
@@ -627,6 +680,10 @@ button {
 
 .heat-cell.out-range {
   opacity: 0.35;
+}
+
+.heat-cell.future {
+  background: #f3f5f3;
 }
 
 .heat-cell.l0,
@@ -1103,6 +1160,29 @@ button {
 
   .heatmap-meta > span:last-child {
     text-align: left;
+  }
+
+  .heatmap-layout {
+    grid-template-columns: 1fr;
+  }
+
+  .heatmap-years {
+    display: flex;
+    gap: 8px;
+    overflow-x: auto;
+    padding-bottom: 2px;
+  }
+
+  .heatmap-years button {
+    flex: 0 0 auto;
+    min-width: 86px;
+    text-align: center;
+  }
+
+  .heatmap-caption {
+    align-items: flex-start;
+    flex-direction: column;
+    gap: 6px;
   }
 
   .merchant-row {

@@ -235,8 +235,15 @@ function Panel({ title, right, span, children }: { title: string; right?: ReactN
 }
 
 function Heatmap({ model }: { model: FinanceModel }) {
-  const heatmap = useMemo(() => buildHeatmap(model), [model]);
+  const todayKey = useMemo(() => toDateKey(new Date()), []);
+  const years = useMemo(() => getHeatmapYears(model, todayKey), [model, todayKey]);
+  const [view, setView] = useState<HeatmapView>({ type: 'rolling' });
+  const heatmap = useMemo(() => buildHeatmap(model, view, todayKey), [model, view, todayKey]);
   const [hovered, setHovered] = useState<HeatmapHover | null>(null);
+
+  useEffect(() => {
+    if (view.type === 'year' && !years.includes(view.year)) setView({ type: 'rolling' });
+  }, [view, years]);
 
   function showTooltip(day: HeatmapDay, event: ReactPointerEvent<HTMLButtonElement>) {
     setHovered({ day, x: event.clientX + 14, y: event.clientY + 14 });
@@ -249,40 +256,59 @@ function Heatmap({ model }: { model: FinanceModel }) {
         <div className="heatmap-legend" aria-label="消费金额图例">
           <span>少</span><i className="l0" /><i className="l1" /><i className="l2" /><i className="l3" /><i className="l4" /><i className="l5" /><span>多</span>
         </div>
-        <span>{model.daily.length} 个活跃日</span>
+        <span>{heatmap.activeDays} 个活跃日 · 今天 {todayKey}</span>
       </div>
-      <div className="heatmap-wrap">
-        <div className="day-labels"><span>一</span><span>二</span><span>三</span><span>四</span><span>五</span><span>六</span><span>日</span></div>
-        <div className="heatmap-calendar">
-          <div className="heatmap-months" style={{ gridTemplateColumns: `repeat(${heatmap.weeks.length}, var(--heat-cell))` }}>
-            {heatmap.months.map((month) => (
-              <span key={month.key} style={{ gridColumn: `${month.start + 1} / span ${month.span}` }}>{month.label}</span>
-            ))}
-          </div>
-          <div className="heatmap-weeks">
-            {heatmap.weeks.map((week, weekIndex) => (
-              <div className="heatmap-week" key={week[0]?.date || weekIndex}>
-                {week.map((day) => (
-                  <button
-                    className={`heat-cell l${day.level} ${day.inRange ? '' : 'out-range'}`}
-                    key={day.date}
-                    type="button"
-                    aria-label={`${day.date} 支出 ${formatCurrency(day.expense)}，${day.count} 笔交易`}
-                    onPointerEnter={(event) => showTooltip(day, event)}
-                    onPointerMove={(event) => showTooltip(day, event)}
-                    onPointerLeave={() => setHovered(null)}
-                  />
-                ))}
-              </div>
-            ))}
+      <div className="heatmap-layout">
+        <div className="heatmap-wrap">
+          <div className="day-labels"><span>一</span><span>二</span><span>三</span><span>四</span><span>五</span><span>六</span><span>日</span></div>
+          <div className="heatmap-calendar">
+            <div className="heatmap-months" style={{ gridTemplateColumns: `repeat(${heatmap.weeks.length}, var(--heat-cell))` }}>
+              {heatmap.months.map((month) => (
+                <span key={month.key} style={{ gridColumn: `${month.start + 1} / span ${month.span}` }}>{month.label}</span>
+              ))}
+            </div>
+            <div className="heatmap-weeks">
+              {heatmap.weeks.map((week, weekIndex) => (
+                <div className="heatmap-week" key={week[0]?.date || weekIndex}>
+                  {week.map((day) => (
+                    <button
+                      className={`heat-cell l${day.level} ${day.inRange ? '' : 'out-range'} ${day.future ? 'future' : ''}`}
+                      key={day.date}
+                      type="button"
+                      aria-label={`${day.date} 支出 ${formatCurrency(day.expense)}，${day.count} 笔交易${day.future ? '，未来日期' : ''}`}
+                      onPointerEnter={(event) => showTooltip(day, event)}
+                      onPointerMove={(event) => showTooltip(day, event)}
+                      onPointerLeave={() => setHovered(null)}
+                    />
+                  ))}
+                </div>
+              ))}
+            </div>
           </div>
         </div>
+        <div className="heatmap-years" aria-label="热力图时间范围">
+          <button className={view.type === 'rolling' ? 'active' : ''} type="button" onClick={() => setView({ type: 'rolling' })}>最近一年</button>
+          {years.map((year) => (
+            <button
+              className={view.type === 'year' && view.year === year ? 'active' : ''}
+              key={year}
+              type="button"
+              onClick={() => setView({ type: 'year', year })}
+            >
+              {year}
+            </button>
+          ))}
+        </div>
+      </div>
+      <div className="heatmap-caption">
+        <span>{heatmap.caption}</span>
+        <span>{heatmap.rangeLabel}</span>
       </div>
       {hovered ? (
         <div className="chart-tooltip heatmap-tooltip" style={{ left: hovered.x, top: hovered.y }}>
           <strong>{hovered.day.date}</strong>
           <span>{formatCurrency(hovered.day.expense)}</span>
-          <em>{hovered.day.count} 笔交易</em>
+          <em>{hovered.day.future ? '未来日期' : `${hovered.day.count} 笔交易`}</em>
         </div>
       ) : null}
     </div>
@@ -486,6 +512,7 @@ interface HeatmapDay {
   count: number;
   level: 0 | 1 | 2 | 3 | 4 | 5;
   inRange: boolean;
+  future: boolean;
 }
 
 interface HeatmapHover {
@@ -494,42 +521,91 @@ interface HeatmapHover {
   y: number;
 }
 
-function buildHeatmap(model: FinanceModel) {
+type HeatmapView = { type: 'rolling' } | { type: 'year'; year: number };
+
+function getHeatmapYears(model: FinanceModel, todayKey: string) {
+  const years = new Set<number>([parseDateKey(todayKey).getFullYear()]);
+  for (const tx of model.transactions) years.add(Number(tx.date.slice(0, 4)));
+  return [...years].filter(Number.isFinite).sort((a, b) => b - a);
+}
+
+function parseDateKey(date: string) {
+  const [year, month, day] = date.split('-').map(Number);
+  return new Date(year, month - 1, day);
+}
+
+function toDateKey(date: Date) {
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, '0');
+  const day = String(date.getDate()).padStart(2, '0');
+  return `${year}-${month}-${day}`;
+}
+
+function addDays(date: Date, days: number) {
+  const next = new Date(date);
+  next.setDate(date.getDate() + days);
+  return next;
+}
+
+function startOfMondayWeek(date: Date) {
+  const start = new Date(date);
+  start.setDate(date.getDate() - ((date.getDay() + 6) % 7));
+  return start;
+}
+
+function endOfSundayWeek(date: Date) {
+  const end = new Date(date);
+  end.setDate(date.getDate() + (6 - ((date.getDay() + 6) % 7)));
+  return end;
+}
+
+function isDateKeyBetween(date: string, start: string, end: string) {
+  return date >= start && date <= end;
+}
+
+function buildHeatmap(model: FinanceModel, view: HeatmapView, todayKey: string) {
   const daily = new Map(model.daily.map((row) => [row.date, row]));
-  const rangeStart = new Date(model.summary.dateRange.start);
-  const rangeEnd = new Date(model.summary.dateRange.end);
-  const sameYear = rangeStart.getFullYear() === rangeEnd.getFullYear();
-  const start = sameYear ? new Date(rangeStart.getFullYear(), 0, 1) : new Date(rangeStart);
-  start.setDate(start.getDate() - ((start.getDay() + 6) % 7));
-  const end = sameYear ? new Date(rangeEnd.getFullYear(), 11, 31) : new Date(rangeEnd);
-  end.setDate(end.getDate() + (6 - ((end.getDay() + 6) % 7)));
-  const max = Math.max(...model.daily.map((row) => row.expense), 1);
+  const today = parseDateKey(todayKey);
+  const isRolling = view.type === 'rolling';
+  const displayStart = isRolling ? addDays(today, -364) : new Date(view.year, 0, 1);
+  const displayEnd = isRolling ? today : new Date(view.year, 11, 31);
+  const start = startOfMondayWeek(displayStart);
+  const end = endOfSundayWeek(displayEnd);
+  const max = Math.max(
+    ...model.daily
+      .filter((row) => isDateKeyBetween(row.date, toDateKey(displayStart), toDateKey(displayEnd)) && row.date <= todayKey)
+      .map((row) => row.expense),
+    1,
+  );
 
   const days: HeatmapDay[] = [];
   const cursor = new Date(start);
   while (cursor <= end) {
-    const date = cursor.toISOString().slice(0, 10);
+    const date = toDateKey(cursor);
     const row = daily.get(date);
-    const expense = row?.expense || 0;
+    const inDisplayRange = cursor >= displayStart && cursor <= displayEnd;
+    const future = date > todayKey;
+    const expense = inDisplayRange && !future ? row?.expense || 0 : 0;
     const ratio = expense / max;
     const level = (expense === 0 ? 0 : ratio > 0.8 ? 5 : ratio > 0.55 ? 4 : ratio > 0.32 ? 3 : ratio > 0.12 ? 2 : 1) as HeatmapDay['level'];
-    days.push({ date, expense, count: row?.count || 0, level, inRange: cursor >= rangeStart && cursor <= rangeEnd });
+    days.push({ date, expense, count: inDisplayRange && !future ? row?.count || 0 : 0, level, inRange: inDisplayRange, future });
     cursor.setDate(cursor.getDate() + 1);
   }
   const weeks: HeatmapDay[][] = [];
   for (let index = 0; index < days.length; index += 7) weeks.push(days.slice(index, index + 7));
-  const labelEnd = sameYear ? new Date(rangeEnd.getFullYear(), 11, 31) : end;
-  const months = buildHeatmapMonths(start, labelEnd, weeks.length);
-  const yearLabel = rangeStart.getFullYear() === rangeEnd.getFullYear()
-    ? `${rangeStart.getFullYear()}`
-    : `${rangeStart.getFullYear()} - ${rangeEnd.getFullYear()}`;
-  return { weeks, months, yearLabel };
+  const months = buildHeatmapMonths(start, displayStart, displayEnd, weeks.length);
+  const activeDays = days.filter((day) => day.inRange && !day.future && day.expense > 0).length;
+  const yearLabel = isRolling ? `最近一年 · 截至今天` : `${view.year} 年`;
+  const caption = isRolling
+    ? '默认像 GitHub 一样显示最近 365 天；导入多份跨年账单后，旧年份可以从右侧单独打开。'
+    : `${view.year} 自然年视图；未来日期保留为空格，方便和全年节奏对齐。`;
+  const rangeLabel = `${toDateKey(displayStart)} - ${toDateKey(displayEnd)}`;
+  return { weeks, months, yearLabel, activeDays, caption, rangeLabel };
 }
 
-function buildHeatmapMonths(calendarStart: Date, calendarEnd: Date, weekCount: number) {
+function buildHeatmapMonths(calendarStart: Date, labelStart: Date, calendarEnd: Date, weekCount: number) {
   const labels: Array<{ key: string; label: string; start: number; span: number }> = [];
-  const cursor = new Date(calendarStart.getFullYear(), calendarStart.getMonth(), 1);
-  if (cursor < calendarStart) cursor.setMonth(cursor.getMonth() + 1);
+  const cursor = new Date(labelStart.getFullYear(), labelStart.getMonth(), 1);
   while (cursor <= calendarEnd) {
     const start = Math.max(0, Math.floor((cursor.getTime() - calendarStart.getTime()) / (86400000 * 7)));
     const next = new Date(cursor);
@@ -538,7 +614,7 @@ function buildHeatmapMonths(calendarStart: Date, calendarEnd: Date, weekCount: n
     const span = Math.max(1, nextStart - start);
     labels.push({
       key: `${cursor.getFullYear()}-${cursor.getMonth()}`,
-      label: cursor.getMonth() === 0 || labels.length === 0 ? `${cursor.getFullYear()}年${cursor.getMonth() + 1}月` : `${cursor.getMonth() + 1}月`,
+      label: `${cursor.getMonth() + 1}月`,
       start,
       span,
     });
@@ -550,10 +626,10 @@ function buildHeatmapMonths(calendarStart: Date, calendarEnd: Date, weekCount: n
 function buildDailySeries(model: FinanceModel) {
   const daily = new Map(model.daily.map((row) => [row.date, row]));
   const rows: Array<{ date: string; expense: number; count: number }> = [];
-  const cursor = new Date(model.summary.dateRange.start);
-  const end = new Date(model.summary.dateRange.end);
+  const cursor = parseDateKey(model.summary.dateRange.start);
+  const end = parseDateKey(model.summary.dateRange.end);
   while (cursor <= end) {
-    const date = cursor.toISOString().slice(0, 10);
+    const date = toDateKey(cursor);
     const row = daily.get(date);
     rows.push({ date, expense: row?.expense || 0, count: row?.count || 0 });
     cursor.setDate(cursor.getDate() + 1);
@@ -581,7 +657,7 @@ function formatCompactCurrency(value: number) {
 }
 
 function formatShortDate(date: string) {
-  const parsed = new Date(date);
+  const parsed = parseDateKey(date);
   return `${parsed.getMonth() + 1}/${parsed.getDate()}`;
 }
 
